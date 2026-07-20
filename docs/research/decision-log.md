@@ -512,8 +512,28 @@ timings come from one M1 Pro; the ratio should travel better than the absolutes.
 ## D-009 — First run is read-only; writing is opt-in
 
 - **Date:** 2026-07-20
-- **Status:** Decided
-- **Evidence:** [context7.md](evidence/context7.md)
+- **Status:** **Partly falsified** — see the correction below
+- **Evidence:** [context7.md](evidence/context7.md),
+  [how-they-operate.md](evidence/how-they-operate.md)
+
+> **Correction, 2026-07-20.** This entry fused two separable claims, and only
+> one survived.
+>
+> **Read-first sequencing — supported.** Reads cost zero LLM calls in Mem0,
+> Graphiti and Zep. A read-only first run really is the cheap trial.
+>
+> **Never-automatic — not supported.** Mem0's shipped coding-agent plugin
+> writes automatically at three trigger points: every 3rd user prompt, every
+> Bash result, and session `Stop`. All default to **on** — `MEM0_AUTO_SAVE`
+> and `MEM0_PREFETCH` are opt-*outs*. That is precisely what this entry ruled
+> out, shipping in the product CRED intends to reach parity with.
+>
+> The error was in the derivation: this rule was inferred from Context7, and
+> **Context7 has no write path at all.** A system with no writes cannot be
+> evidence about when to write.
+>
+> What holds: reads before writes, and writes that are visible and reversible.
+> What does not: forbidding automatic contribution.
 
 ### Decision
 
@@ -1132,3 +1152,95 @@ Carried forward so they are not rediscovered:
 Two funded competitors closed exactly the layer CRED is opening (D-014). If
 CRED later needs revenue, that lever has been given away deliberately and
 cannot be quietly taken back.
+
+---
+
+## D-016 — The first slice: seed from documentation, not repository history
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Amends:** D-009
+- **Evidence:** [how-they-operate.md](evidence/how-they-operate.md)
+
+### Decision
+
+The first implementation slice is a **read-only vertical**: seed from the
+repository's own documentation and agent instruction files, index it, and
+expose recall through one MCP tool and a CLI.
+
+**Seeding comes from documentation, not from git history.** The proposal to
+seed from commit history is withdrawn.
+
+### Why the git-history proposal was wrong
+
+The reason is CRED's own thesis, and it is the cleanest argument in the
+research so far.
+
+A claim anchored to `AGENTS.md:42` **expires when that file changes**. A claim
+extracted from commit `abc123` has **immutable evidence and can therefore
+never expire.** Seeding from history would fill the store with claims that are
+permanently unfalsifiable — the exact inverse of *a claim lives only while its
+evidence does.*
+
+The tagline is not decoration. It is a constraint on what may be ingested.
+
+### What the operational evidence changed
+
+Cold-start seeding is **not** a vacancy. Mem0 ships it:
+`integrations/mem0-plugin/scripts/auto_import.py` imports `CLAUDE.md`,
+`AGENTS.md`, `.cursorrules` and `.windsurfrules` on `SessionStart`, with
+SHA-256 change detection, in 374 lines. Supermemory has importers; Letta has
+document upload.
+
+What is actually true is narrower and still useful: **nobody seeds from
+repository history, and where real seeding exists it is gated behind the
+hosted tier.**
+
+### The unclaimed position
+
+**Nothing in this category ships config-free except the systems that never
+call an LLM.** Since read paths cost zero LLM calls everywhere, D-008's
+pure-Go in-process embeddings make a **zero-configuration read path**
+achievable — no API key, no provider choice, no vector-store decision.
+
+No competitor has one. This is the strongest unoccupied position the research
+has found, and it is a consequence of a decision already made for other
+reasons.
+
+### The latency budget to meet
+
+| Source | Figure |
+|---|---|
+| Mem0 hook timeout, `UserPromptSubmit` | 8 s |
+| Mem0 search timeout | 5 s |
+| Mem0's own stated comfort | "~150–200 ms is well within budget" |
+| Zep Cloud, LoCoMo | median 241 ms, p95 576 ms, p99 933 ms |
+
+Zep's figures are **cloud over network, concurrency 20, with a cross-encoder**
+— not comparable to a local process, and not a target. The number to beat is
+Mem0's 150–200 ms comfort band, which D-010's 51 ms local embed already fits
+inside.
+
+### The cost of this slice, named
+
+This slice is close to **"Context7 with a local index."** It ships the
+documentation-retrieval arm — which is the arm CRED's own ablation is betting
+*against*, since D-012's thesis requires experiential memory to contribute
+independently.
+
+That is acceptable as a first slice because it is the cheapest thing that is
+genuinely useful, and because it makes the ablation runnable against a real
+system instead of a hypothesis. It is not acceptable as a destination.
+
+### What this rules out
+
+- Seeding from commit history, or from any source whose evidence cannot change.
+- Requiring an API key, an LLM provider, or a vector-store choice to read.
+- Treating the first slice as the product.
+
+### Write path, deferred but not forbidden
+
+D-009's never-automatic rule is withdrawn. When writes arrive, the shipped
+precedent is automatic contribution at agent-lifecycle trigger points,
+defaulting to on. The constraint that survives is that writes must be
+**visible and reversible**, not that they must be manual.
