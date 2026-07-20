@@ -24,6 +24,8 @@ evidence does.
   threshold, and why the existing benchmark does not settle the question.
 - [Go embeddings and tokenizer](research/spikes/go-embeddings-tokenizer.md) —
   the spike that decides whether the product can be written in Go at all.
+- [Go reranker](research/spikes/go-reranker.md) — why cross-encoder reranking is
+  cut from v1, and what replaces it.
 - [Technical decisions](research/spikes/tech-decisions.md) — language,
   datastore, queue, and the failure modes each choice implies.
 - [Language and MCP](research/spikes/tech-language-and-mcp.md) — runtime
@@ -46,6 +48,7 @@ URLs. Repository scans read actual source code rather than documentation.
 | [onyx.md](research/evidence/onyx.md) | Enterprise search, ACL model, OSS/EE boundary | 495 lines |
 | [langfuse.md](research/evidence/langfuse.md) | Tracing, prompt versioning, evaluation | 593 lines |
 | [ragflow.md](research/evidence/ragflow.md) | Document parsing, citation model | 434 lines |
+| [context7.md](research/evidence/context7.md) | The most-installed MCP server: how it won distribution | 737 lines |
 | [mem0.md](research/evidence/mem0.md) | Memory layer, write path, governance | 425 lines |
 | [letta.md](research/evidence/letta.md) | Context hierarchy, memory blocks, agent state | 330 lines |
 

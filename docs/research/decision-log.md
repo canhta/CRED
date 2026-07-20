@@ -506,3 +506,153 @@ model and gomlx explicitly scopes `simplego` to small ones; this result does not
 transfer, and reranking is in v1 scope. **int8 quantization is untested** — the
 most obvious unpulled lever on both the 12x gap and the 632 MB peak RSS. All
 timings come from one M1 Pro; the ratio should travel better than the absolutes.
+
+---
+
+## D-009 — First run is read-only; writing is opt-in
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Evidence:** [context7.md](evidence/context7.md)
+
+### Decision
+
+CRED's first run reads and never writes. Contribution — the act of storing a
+claim — is a deliberate, separate step the user takes after they have already
+gotten value from recall.
+
+`CONTEXT7_API_KEY` also stays out of the first run, confirming the existing
+no-API-key constraint. That constraint is now evidence-backed rather than
+asserted: Context7 launched with no key, added one three months later, and two
+commits explicitly **remove** key mentions to cut install friction.
+
+### Reasoning
+
+Context7 exposes **two** MCP tools, both read-only, both taking two string
+parameters. It reached 59,457 stars and 3.7M npm downloads per month. Its trial
+is free in the only sense that matters — installing it costs the user nothing
+they can regret, because it cannot change anything.
+
+CRED writes. That makes its first install **structurally more expensive** than
+any read-only server, and no amount of packaging polish removes that. A user
+evaluating CRED is being asked to let an agent store things about their work
+before they have any reason to trust the storage.
+
+Separating the two collapses the trial cost back to Context7's level without
+giving up the write path.
+
+### What this rules out
+
+- Any onboarding flow where the first agent interaction produces a write.
+- Automatic background contribution before explicit opt-in, however useful.
+- Treating the tool count as settled. Four tools is not obviously wrong, but the
+  best available evidence points toward fewer, and the burden is on each tool to
+  justify itself rather than on the reduction to justify itself.
+
+### What this forces
+
+Cold-start seeding (repository history and documentation) must carry the entire
+first-run value, because nothing else will have been written yet. That was
+already required by D-003's n=1 constraint; this makes it load-bearing twice.
+
+### Disconfirming evidence recorded, not smoothed
+
+Two findings from the same scan cut against current decisions:
+
+1. **Auditability is weaker as a wedge than D-005 assumed.** Context7's trust
+   signals ("Benchmark Score", "Source Reputation") are unexplained,
+   popularity-shaped, and closed. 59k users did not care. This supports D-006's
+   demotion of differentiation and should be read as evidence that
+   evidence-based trust is a *correctness* argument, not a *demand* argument.
+2. **"Never gate SSO" is not unanimous practice.** Context7 gates SSO to
+   Enterprise, contradicting the operating parameter in D-007. Langfuse's
+   evidence still carries that rule, but it is one strong case rather than a law.
+
+### Open tension (unresolved)
+
+Context7's distribution rested on a problem nobody had to be *sold*: "my LLM
+gives outdated docs." D-006 bets that founder channel access substitutes for
+pre-existing demand. Context7 proves the **mechanics** are reproducible by a
+small team — fifteen months of packaging every channel, no growth hack — but is
+**silent on whether those mechanics work without the demand underneath them.**
+
+That gap is the same one D-007 already flagged as the weakest point in the plan.
+Two independent scans have now landed on it. It is not a documentation problem;
+it is the thing the v0 experiment and a demand survey exist to test.
+
+---
+
+## D-010 — Cross-encoder reranking is cut from v1; MaxSim replaces it
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Amends:** D-008 (falsifies its int8 expectation), supersedes the reranking
+  row in [tech-decisions.md](spikes/tech-decisions.md)
+- **Evidence:** [go-reranker.md](spikes/go-reranker.md)
+
+### Decision
+
+v1 ships **no cross-encoder reranker**. Second-stage ranking is ColBERT-style
+**MaxSim late interaction** over token vectors from `bge-small-en-v1.5` — the
+model and tokenizer D-008 already verified.
+
+### Reasoning
+
+D-008 left the reranker as its largest open risk, on the theory that a larger
+model might not survive pure Go. That framing was wrong in an instructive way.
+
+`bge-reranker-v2-m3` **does** run in pure Go. No missing op, no OOM; `simplego`
+executes all 26 op types, and the Go/ONNX Runtime gap actually **narrowed** to
+4.7–8.9x from D-008's 9–16x. It is still unusable: **1.8 s per pair on ONNX
+Runtime with CGO**, or 67 s for 50 candidates. The model is infeasible on CPU
+regardless of language, so the previous choice was wrong independently of Go.
+
+No substitute clears the bar. The fastest, `jina-reranker-v1-turbo-en` at 37.8M
+parameters, needs **5.2 s for 20 candidates** at seq 128 — against 51 ms to
+embed the query. Between 101x and 1,287x over budget.
+
+MaxSim delivers **+0.0293 NDCG@10 against the cross-encoder's +0.0356** — 82% of
+the gain at **1/5,841th the cost**, 0.05 ms per pair.
+
+### What this rules out
+
+- Any cross-encoder in the interactive path on CPU, at any model size tested.
+- **int8 quantization as a latency lever in pure Go.** D-008 flagged it as the
+  obvious unpulled lever; it is **2.05x slower**, not faster, because
+  `onnx-gomlx` widens both int8 operands to int32 before multiplying
+  (`ops.go:2967`). ONNX Runtime gets 1.72x faster on the same models. It remains
+  a **memory** lever: 2.6x RSS reduction (610 → 231 MB) at 0.0004 NDCG cost.
+- Trusting an available Go SentencePiece tokenizer. `eliben/go-sentencepiece`
+  refuses the model (`model type UNIGRAM not supported`). `sugarme/tokenizer`
+  scores 96.22% with 948 hard panics, fails **100% of inputs containing two
+  consecutive spaces** — that is all indented code — and silently ignores
+  truncation on the pair path, the only path a cross-encoder uses.
+- D-008's mitigation as a general technique. Probing enumerates a per-codepoint
+  predicate; it cannot enumerate a 237 KB string-to-string Darts trie. The
+  WordPiece fix does not generalize to SentencePiece.
+
+### What this forces
+
+MaxSim costs **242x storage per document**, measured uncompressed: roughly
+17 GB against 73 MB for 100k chunks. That is the real trade, and it lands on
+L7's single-database constraint. Storage strategy for token vectors is now an
+open design question, not a settled one.
+
+A reranker must beat the vector-only baseline on a labelled set before shipping.
+This is not a formality: `mxbai-rerank-xsmall-v1` scored **−0.0246 NDCG@10**,
+actively worse than no reranking, while being 1.9x larger and 2.1x slower than
+the model that scored +0.0356.
+
+### Unverified
+
+`bge-reranker-v2-m3`'s own NDCG and its int8 benchmark were still running when
+the spike closed. Neither is load-bearing — m3 is excluded on latency by an
+order of magnitude regardless of its quality.
+
+### Process note
+
+A truncated download nearly became a fabricated upstream defect: a `curl` loop
+killed by a timeout at 5.5 MB of 17 MB produced an unparseable `tokenizer.json`.
+**Size-check every downloaded artifact against `x-linked-size`.** Recorded here
+because the near-miss is the same failure shape as the earlier fabricated
+citations, and the rule that catches it is cheap.

@@ -21,7 +21,7 @@ Companion document: [tech-language-and-mcp.md](tech-language-and-mcp.md).
 | Dedup at v1 | **Exact hash only.** No MinHash/LSH |
 | Migrations | Mechanics in-language; **`squawk`** as the CI linter |
 | Code anchoring | **tree-sitter** symbol path + normalized AST-node hash |
-| Reranking | `BAAI/bge-reranker-v2-m3` (Apache-2.0), top-50 only, opt-in per call |
+| Reranking | ColBERT-style MaxSim over `bge-small-en-v1.5` token vectors. **Cross-encoder reranking is cut** — see [go-reranker.md](go-reranker.md) and D-010 |
 | Observability | OpenTelemetry emitted; never a bundled trace UI |
 
 ---

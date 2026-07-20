@@ -234,6 +234,16 @@ entrant (Block, an AAIF board member) has stalled.
 
 Every launch attacking distribution/sync has failed on HN:
 
+> **FALSIFIED inference, 2026-07-20.** The table below is accurate, but the
+> conclusion drawn from it — that a 1–4 point HN launch indicates absent demand
+> — does not hold for MCP servers. Context7's Show HN scored **4 points with 2
+> comments**, and no Context7 submission ever cleared 4 points. It went on to
+> **59,457 GitHub stars and 3.7M npm downloads per month**
+> ([context7.md](context7.md)).
+>
+> These products did fail. The HN score is not what demonstrates it. Retained
+> here rather than deleted so the inference is not re-derived.
+
 | Launch | Points | Comments |
 |---|---|---|
 | [Ruler — same rules to all coding agents](https://news.ycombinator.com/item?id=44062058) | 3 | 0 |
