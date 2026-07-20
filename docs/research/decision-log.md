@@ -736,3 +736,82 @@ killed by a timeout at 5.5 MB of 17 MB produced an unparseable `tokenizer.json`.
 **Size-check every downloaded artifact against `x-linked-size`.** Recorded here
 because the near-miss is the same failure shape as the earlier fabricated
 citations, and the rule that catches it is cheap.
+
+---
+
+## D-011 — Sovereignty is a tiebreaker, not a wedge
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Amends:** D-004
+- **Evidence:** [demand interview 001](evidence/demand/001-seta-founder.md)
+
+### Decision
+
+Stop treating data sovereignty as the differentiator. It is a **default
+preference that trades away against speed**, not a binding constraint.
+
+Self-hosting remains a **capability CRED must have** — it is cheap to keep and
+D-003's bottom rung requires a local single-user mode anyway. What changes is
+that it is no longer the reason anyone would choose CRED, and it must stop
+appearing in positioning as though it were.
+
+### Reasoning
+
+D-004 rests on one sentence: *organizations want organizational agent memory,
+and the binding constraint on adoption is that it must run on their own
+infrastructure.* [demand-test.md](demand-test.md) pre-registered the test:
+if the blocker named is cost or usefulness rather than data residency, the
+premise fails.
+
+The first interview — a ~300-person organization running agents across the
+whole SDLC — answered Q8 **"both."** Self-hosting is the default to protect
+company resources, but cloud is acceptable when a project is large enough to
+justify it. Q9 named the blockers as **cost, trust, security, and whether it
+is worth it** — security present, but neither first nor alone.
+
+A preference that yields to speed cannot carry differentiation.
+
+The evidential weight is higher than n = 1 usually earns, because of the
+direction: **the most biased available source returned disconfirming
+evidence.** The respondent is the founder describing their own organization,
+and founders recall thesis-supporting incidents more readily than quiet weeks.
+Biased sources normally confirm. This one did not.
+
+### What this rules out
+
+- Sovereignty as the headline in any positioning, README, or launch.
+- Any roadmap item justified primarily by air-gap or on-prem operation.
+- Reading D-004's competitive argument as intact. Its risk list survives; its
+  differentiation claim does not.
+
+### What this forces
+
+CRED needs a different answer to *why choose this over a hosted competitor*,
+and the honest current answer is: **there is not yet a demonstrated one.**
+D-006 already demoted differentiation in favour of distribution, and this
+strengthens that reading rather than creating a new problem.
+
+The four blockers named — cost, trust, security, worth-it — are the criteria a
+buyer will actually apply. Being open source addresses cost and trust
+structurally. That is a weaker claim than sovereignty but it is the one the
+evidence supports.
+
+### The observation that survived, and needs a second source
+
+The same interview reported knowledge spread across **five stores**: ADRs,
+Claude memory, `docs/` folders, Confluence, and verbal exchange. That is the
+strongest pro-thesis observation gathered so far, and it comes from the same
+biased source. It needs a non-founder to confirm before anything is built on
+it.
+
+### Open tension (unresolved)
+
+**Agents assist rather than replace, with a human reviewing output.** If that
+generalizes, an agent working from stale context costs review time rather than
+a production incident — lower stakes, lower willingness to pay, and a failure
+mode already caught by an existing control.
+
+This weakens the pain the product is built around, and it was volunteered
+rather than probed for. It is now the second thing interviews 002+ must test,
+after the fragmentation observation.
