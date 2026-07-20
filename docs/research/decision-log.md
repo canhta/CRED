@@ -621,9 +621,10 @@ wrong independently of Go.
 
 No substitute clears the bar. The fastest, `jina-reranker-v1-turbo-en` at 37.8M
 parameters, needs **2.5 s for 20 candidates** at seq 128 and 6.2 s for 50 —
-against 51 ms to embed the query. Between **49x and 282x over budget**.
+against 51 ms to embed the query. Between **49x over budget at the most
+favourable configuration and 1,038x at a realistic one**.
 
-MaxSim delivers **+0.0293 NDCG@10** at **1/5,841th the cost**, 0.05 ms per pair.
+MaxSim delivers **+0.0293 NDCG@10** at **1/2,468th the cost**, 0.05 ms per pair.
 
 The price is named rather than buried. `bge-reranker-v2-m3` is genuinely the
 best reranker measured, and MaxSim gives up **0.0167 NDCG@10** against it:
@@ -662,8 +663,14 @@ Size does not predict quality: the ordering was 567.8M > 37.8M > 70.8M.
   >
   > `bge-small` fp32 absolute fell from 331.38 ms to **206.13 ms**, now
   > consistent with D-008's independent 222.9 ms. The direction never moved:
-  > `jina` and `mxbai` were measured back-to-back in a single command, so their
-  > ratios were never cross-command and never distorted.
+  > all four back-to-back int8 ratios landed within 4% of their contended
+  > values (2.05→1.98x, 1.92→1.95x, 1.70→1.69x). Only the two figures
+  > assembled across commands were badly wrong.
+  >
+  > **Peak RSS is not reproducible to better than ~1.6x**, and this is not
+  > contention: `bge-reranker-base` moved 2.65→4.19 GB while m3 moved
+  > 4.58→3.60 GB — opposite directions, so allocator and GC timing. Treat every
+  > RSS figure in these entries as order-of-magnitude only.
 
   It is **roughly 2x slower** across four models, not
   faster, because `onnx-gomlx` widens both int8 operands to int32 before
