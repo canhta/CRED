@@ -423,7 +423,10 @@ of the thesis.
 
 ### Operating parameters set by this evidence
 
-- Emit `AGENTS.md` before `CLAUDE.md` — 154,496 files vs 51,100 on GitHub code
+- Emit `AGENTS.md` before `CLAUDE.md` — re-measured 2026-07-20 as **151,168 vs
+  53,132**; the ratio holds at ~2.85x but the absolutes below are stale and
+  GitHub's `total_count` is approximate. Originally 154,496 files vs 51,100 on
+  GitHub code
   search; the format contest is settled 3:1.
 - Price anchor is **$20–40 per seat per month**. Memco at $599 per contributor
   per year sits outside the market — an exploitable weakness, not a benchmark.
@@ -485,8 +488,19 @@ invisible on English text — the worst possible failure shape.
   until run against the three suites.
 - Using `go tool nm | grep cgo` as a CI guard. It reports 10 `_cgo_` symbols
   with CGO both on and off, so a check built on it **passes silently while
-  broken**. The working guard is `go list -f '{{if .CgoFiles}}...' -deps ./...`,
-  run against the real shipping build command.
+  broken**.
+
+  > **Refined 2026-07-20** ([go-repo-conventions.md](spikes/go-repo-conventions.md)).
+  > The replacement guard has a **second vacuous-pass mode**, verified by
+  > running it: with a cgo-only dependency present and `CGO_ENABLED=0`,
+  > `go list` writes its complaint to **stderr** and emits nothing on stdout,
+  > so `[ -z "$(... 2>/dev/null)" ]` reports clean while the build is broken.
+  > That is the same failure shape this entry rejected `nm` for.
+  >
+  > The guard must be **two assertions**: enumerate cgo packages under
+  > `CGO_ENABLED=1`, then assert `CGO_ENABLED=0 go build` succeeds. Running
+  > `go list` under `CGO_ENABLED=0` alone — the intuitive reading of "against
+  > the real shipping build" — is vacuous.
 
 ### What this forces
 

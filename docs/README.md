@@ -30,6 +30,8 @@ evidence does.
   the spike that decides whether the product can be written in Go at all.
 - [Go reranker](research/spikes/go-reranker.md) — why cross-encoder reranking is
   cut from v1, and what replaces it.
+- [Go repository conventions](research/spikes/go-repo-conventions.md) — layout,
+  linting, testing, and what a solo maintainer should skip.
 - [Technical decisions](research/spikes/tech-decisions.md) — language,
   datastore, queue, and the failure modes each choice implies.
 - [Language and MCP](research/spikes/tech-language-and-mcp.md) — runtime

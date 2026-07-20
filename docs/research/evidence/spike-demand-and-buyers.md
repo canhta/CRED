@@ -151,8 +151,8 @@ retained as the claim that was made; see
 
 | File | Count |
 |---|---|
-| **AGENTS.md** | **154,496** |
-| **CLAUDE.md** | **51,100** |
+| **AGENTS.md** | **154,496** (re-measured 2026-07-20: **151,168**) |
+| **CLAUDE.md** | **51,100** (re-measured 2026-07-20: **53,132**) |
 | .cursorrules | 7,208 |
 | copilot-instructions.md | 4,064 |
 

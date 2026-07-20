@@ -2,12 +2,13 @@
 paths:
   - "docs/**/*"
   - "README.md"
+  - "AGENTS.md"
   - "CLAUDE.md"
 ---
 
 # Documentation rules
 
-Applies to everything under `docs/`, plus `README.md` and `CLAUDE.md`.
+Applies to everything under `docs/`, plus `README.md` and `AGENTS.md`.
 
 The documentation is currently the entire product. Treat it as the deliverable
 it is.
