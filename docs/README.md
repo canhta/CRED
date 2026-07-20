@@ -55,6 +55,7 @@ URLs. Repository scans read actual source code rather than documentation.
 | [context7.md](research/evidence/context7.md) | The most-installed MCP server: how it won distribution | 737 lines |
 | [eval-methodology-prior-art.md](research/evidence/eval-methodology-prior-art.md) | Model config, baselines, judges, cost accounting across memory evals | 648 lines |
 | [why-survivors-survive.md](research/evidence/why-survivors-survive.md) | How Mem0, Zep, Letta and others actually get adopted and paid | 939 lines |
+| [the-three-retreats.md](research/evidence/the-three-retreats.md) | Why Mem0, Letta and Zep withdrew the team layer: abandoned or monetized | 823 lines |
 | [mem0.md](research/evidence/mem0.md) | Memory layer, write path, governance | 425 lines |
 | [letta.md](research/evidence/letta.md) | Context hierarchy, memory blocks, agent state | 330 lines |
 

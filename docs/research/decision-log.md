@@ -971,16 +971,110 @@ product within twelve months.** Mem0 v2.0.0 (2026-04-14) **removed**
 server, and its PyPI downloads fell **203k → 90k in one month**. Zep killed
 self-hosting.
 
-This cuts both ways and must not be read as only one:
+> **SUPERSEDED by D-014, 2026-07-20.** The paragraph above was investigated
+> and three of its four load-bearing claims did not survive
+> ([the-three-retreats.md](evidence/the-three-retreats.md)):
+>
+> - **Letta's 203k → 90k download fall is a burst artifact.** Daily series:
+>   April baseline ~2,777/day, June ~2,970/day — **June is higher than
+>   before the announcement**. May's figure contains a 259,952-download burst
+>   confined to Python 3.12, and the announcement was six weeks earlier.
+>   FALSIFIED. It was cited here after surviving a prior review.
+> - **Mem0's `org_id` removal was one of fifteen parameters** dropped in a
+>   typed-options refactor, alongside `output_format` and `batch_size`.
+>   `/v1/ping/` resolved org and project from the API key before and after,
+>   byte-identical. Removing a caller-supplied override is a **security fix**,
+>   not a withdrawal of governance.
+> - **Zep is undetermined.** BYOC appears in the pricing table and in zero of
+>   265 documentation pages, so the artifact that would settle motive does not
+>   exist.
+>
+> "Three funded companies retreated" was the wrong reading. What actually
+> happened is recorded in D-014.
 
-- It is **the gap CRED targets**, now confirmed vacant by three withdrawals
-  rather than by absence of attempts.
-- It is also **evidence that the gap is hard or unwanted**, told by three
-  teams who tried it with funding and money to survive being wrong.
+---
 
-D-003 already recorded the likely mechanism: governance adds friction exactly
-when an individual user wants speed. These three retreats are that mechanism
-observed at scale, in the market, with real consequences.
+## D-014 — The gap is a pricing vacancy; governance ships in the open engine
 
-**This is the assumption to test first under D-012** — not whether teams want
-shared memory, but why every funded attempt to give it to them was pulled back.
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Supersedes:** the "three retreats" open tension in D-013
+- **Evidence:** [the-three-retreats.md](evidence/the-three-retreats.md)
+
+### Decision
+
+Org, member, and role primitives **live in the binary a solo developer runs
+offline**. They are not a client-side wrapper over a hosted service, and they
+are not held back for a paid tier.
+
+### What the investigation actually found
+
+The founder's hypothesis was that the three companies moved the team layer out
+of OSS into the paid product rather than abandoning it. **Two of three
+confirm.**
+
+| Company | Verdict | Deciding artifact |
+|---|---|---|
+| Mem0 | **Monetized, actively defended** | `client.project.add_member(email, role=...)` ships in OSS `mem0ai` 2.0.12 against a live, undeprecated hosted org/project API of 21 operations |
+| Letta | **Monetized** | `git_http.py:264-269` returns HTTP 501 `"git HTTP requires memfs service"` — client open, service closed |
+| Zep | **Cannot determine** | The artifact does not exist: BYOC is in the pricing table and in zero of 265 doc pages |
+
+The distinction matters more than the count. In every determined case the
+**closed half is a service and the open half is a client** — and what stayed
+open is extraction and retrieval while what closed is governance and tenancy.
+That is **the exact inverse of the split CRED proposed.**
+
+### The strongest single artifact in the research
+
+mem0 issue #4589 and PR #4590. A production user diagnosed the org-scoping
+gap, wrote the patch, took review feedback, and had it closed with *"doesn't
+align with the current SDK direction"* — two weeks before the parameter was
+deleted. The user's reply:
+
+> "we will directly search with the Qdrant, resulting in not using Mem0
+> client.search()."
+
+**Demand was not absent. It was declined.** Every prior reading in this
+project treated the vacancy as evidence that nobody wanted the team layer.
+This is a paying user writing the code, being refused, and leaving.
+
+### What this rules out
+
+- Reading the vacancy as absence of demand. It is a commercial choice by
+  incumbents, and a user walked over it.
+- Any architecture where the principal type exists only in a client package.
+- Holding org/member/role back as a monetization lever.
+
+### The test, and it is checkable in one command
+
+> Grep the engine for the principal type. **If it only appears in a client
+> package, the retreat has already happened.**
+
+This applies to CRED's own codebase as a standing check, not only to
+competitors.
+
+### The cost, named
+
+Governance is **the only obvious monetization lever** in this category. Putting
+it in the open tier forecloses it. D-012 makes that affordable — success is a
+good OSS project with real users, not a revenue ramp — but the trade is now
+deliberate rather than accidental, and reversing it later means taking
+something back from users who already have it.
+
+### Correction to D-003
+
+D-003's friction mechanism — governance adds friction exactly when an
+individual wants speed — is **mis-scoped rather than confirmed or falsified**.
+It describes *buyer* behaviour. Every retreat examined here is a *seller*
+decision. The conclusion D-003 draws still stands; the reason it gives does not
+match this evidence.
+
+### Corrections to existing evidence documents
+
+Recorded because they were load-bearing and wrong:
+
+- `letta.md` states Letta is deprecating `read_only`. It is **enforced** at
+  `letta/agent.py:191-196` with 55 references; the `deprecated=True` marker is
+  on the wire schema only. FALSIFIED.
+- The "239 vs 33" OSS/cloud endpoint gap in the same document is a unit
+  mismatch: 194 vs 239 paths, giving 62 cloud-only. Corrected.
