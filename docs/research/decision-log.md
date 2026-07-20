@@ -1078,3 +1078,57 @@ Recorded because they were load-bearing and wrong:
   on the wire schema only. FALSIFIED.
 - The "239 vs 33" OSS/cloud endpoint gap in the same document is a unit
   mismatch: 194 vs 239 paths, giving 62 cloud-only. Corrected.
+
+---
+
+## D-015 — Build. Research phase closed
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+
+### Decision
+
+CRED gets built. The discovery phase is closed and does not reopen on market
+grounds.
+
+The founder's reasoning, accepted: **not building leaves outstanding at zero.**
+Under D-012 the bar is a good open-source project with real users, and no
+further evidence is needed to justify attempting that.
+
+### What this closes
+
+- The existence question. It is not asked again.
+- The demand test as a gate. It continues as ordinary user research, on the
+  schedule the founder chooses, and never blocks a commit.
+- v0 as a precondition. It becomes a design check run against a working
+  system, not a hurdle before one exists.
+
+### What remains open, as engineering questions only
+
+These stay live because they change what gets built, not whether:
+
+- Whether retrieval beats a long window **for a given task shape** — if it does
+  not, do not retrieve for that shape.
+- Token-vector storage for MaxSim: 242x per document against L7's single
+  database (D-010).
+- Which framework integrations to ship into, and in what order (D-013).
+
+### The constraints this build inherits
+
+Carried forward so they are not rediscovered:
+
+| Decision | Constraint |
+|---|---|
+| D-008 | Go, pure-Go embeddings, `CGO_ENABLED=0`, tokenizer tables probed from the reference |
+| D-009 | First run reads and never writes; contribution is opt-in |
+| D-010 | MaxSim, no cross-encoder |
+| D-011 | Sovereignty is a capability, never the pitch |
+| D-013 | Metered, never per seat; distribution is framework integration |
+| D-014 | Org, member and role live in the engine, not a client |
+| L1–L8 | The design laws in the PRD |
+
+### Standing risk
+
+Two funded competitors closed exactly the layer CRED is opening (D-014). If
+CRED later needs revenue, that lever has been given away deliberately and
+cannot be quietly taken back.
