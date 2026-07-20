@@ -1,0 +1,46 @@
+{
+  "name": "smoke",
+  "_comment": "Plumbing test only. Mock provider, tiny counts. Nothing produced under this config is a measurement; freeze refuses it without --allow-mock and analyze warns on every mock run.",
+  "arms": ["A0", "A", "C_both"],
+  "n_eval_tasks": 12,
+  "n_dev_tasks": 4,
+  "runs_per_task": 3,
+  "models": [
+    {
+      "alias": "mock",
+      "provider": "mock",
+      "model_id": "mock-1",
+      "family": "mock",
+      "tier": "mid",
+      "max_input_tokens": 200000,
+      "caching": true
+    }
+  ],
+  "corpus_sizes": ["S"],
+  "primary_size": "S",
+  "memory_token_ceiling": 4000,
+  "temperature": 0.0,
+  "seeds": [1337, 1338, 1339],
+  "decoy_share": 0.15,
+  "amortization_n": 200,
+  "family_shares": {
+    "decision_rationale": 0.30,
+    "unwritten_convention": 0.25,
+    "cross_cutting_context": 0.20,
+    "failure_recall": 0.10,
+    "abstention_decoy": 0.15
+  },
+  "thresholds": {
+    "proceed_delta_points": 10.0,
+    "amber_upper_points": 10.0,
+    "cost_multiple_max": 3.0,
+    "kappa_min": 0.70,
+    "flip_rate_max": 0.25,
+    "recall_at_k_min": 0.60,
+    "audit_flag_rate_max": 0.15,
+    "ablation_delta_points": 7.0,
+    "bootstrap_resamples": 2000,
+    "ci_level": 0.95
+  },
+  "may_greenlight": false
+}

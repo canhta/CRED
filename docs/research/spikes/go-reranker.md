@@ -17,11 +17,11 @@ under [Environment](#environment). No number is estimated.
 
 | Area | Decision |
 |---|---|
-| `bge-reranker-v2-m3` in pure Go | **Rejected.** Runs, but 8.6 s per pair at seq 512 |
-| `bge-reranker-v2-m3` at all, any backend | **Rejected on CPU.** 1.8 s per pair on ONNX Runtime |
-| Cross-encoder reranking at v1 | **Cut.** No candidate fits an interactive budget in pure Go |
+| `bge-reranker-v2-m3` in pure Go | **Rejected.** Runs, but 9.3 s per pair at seq 512 |
+| `bge-reranker-v2-m3` at all, any backend | **Rejected on CPU.** 882 ms per pair on ONNX Runtime; 44 s for 50 |
+| Cross-encoder reranking at v1 | **Cut**, at a measured cost of 0.0167 NDCG@10. No candidate fits an interactive budget in pure Go |
 | Replacement | **ColBERT-style MaxSim** over `bge-small-en-v1.5` token vectors |
-| int8 in `simplego` | **Do not ship for latency.** 2.0–2.1x *slower*. Ships 2.6x less RSS |
+| int8 in `simplego` | **Do not ship for latency.** 1.95–2.28x *slower* across three models. Ships 1.4–2.2x less RSS |
 | Third-party Go tokenizers | **Still unusable.** `sugarme` 96.22%, 948 panics |
 
 ---
@@ -101,6 +101,39 @@ gomlx `simplego` v0.27.3, built `CGO_ENABLED=0`, taking `-model`, `-batch`,
 `-seq`, `-reps`. Compile and weight upload happen in a warmup pass that is
 excluded from the timings. Peak RSS from `/usr/bin/time -l`.
 
+### Measurement conditions
+
+**Read this before trusting any latency figure here.** The first pass of this
+spike ran benchmarks while other jobs were on the
+machine, and several published numbers were wrong because of it.** They have
+been re-measured; the corrections are recorded inline rather than silently
+patched. The rule that emerged, stated plainly because it invalidated a
+headline finding:
+
+> **A latency ratio is only trustworthy when both sides were measured
+> back-to-back in the same command, on an otherwise idle machine.**
+> Comparing two numbers taken from different commands under different load
+> produces a plausible ratio that is pure artifact.
+
+Concretely, the contended-versus-clean gap on identical configurations:
+
+| Measurement | Contended | Clean | Inflation |
+|---|---|---|---|
+| `bge-small` b8 s128 fp32, Go | 331.38 ms | 206.13 ms | 1.61x |
+| m3 b1 s512 fp32, ONNX Runtime | 1836.34 ms | 882.30 ms | 2.08x |
+| m3 b1 s256 fp32, ONNX Runtime | 1032.98 ms | 415.00 ms | 2.49x |
+
+The clean `bge-small` figure (206.13 ms) reconciles with D-008's independently
+measured 222.9 ms for the same shape to within 7.5%. The contended one did not,
+and that discrepancy is what exposed the problem — **cross-checking a new
+measurement against a prior spike's number for the same configuration is worth
+doing every time.**
+
+All latency figures below are clean unless explicitly labelled otherwise.
+Ratios measured back-to-back within one command survived the re-measurement
+unchanged in direction and within ~15% in magnitude; cross-command ratios did
+not.
+
 **ONNX Runtime baseline.** `onnxruntime` 1.27.0, `CPUExecutionProvider`, same
 graph, same shapes, 3 timed repetitions after a warmup.
 
@@ -170,56 +203,62 @@ rep 2: 2.229608083s
 RESULT batch=1 seq=128 avg=2.226231264s per_pair=2226.23ms
 ```
 
-The full sweep, against ONNX Runtime on the identical graph:
+The clean sweep, batch 1, both backends measured on an idle machine:
 
-| batch | seq | Go `simplego` per pair | Go peak RSS | ORT per pair | Ratio |
-|---|---|---|---|---|---|
-| 1 | 128 | 2369.51 ms | 3.44 GB | 473.35 ms | 5.0x |
-| 8 | 128 | 3112.68 ms | 2.74 GB | 413.62 ms | 7.5x |
-| 1 | 256 | 6816.06 ms | 3.59 GB | 1032.98 ms | 6.6x |
-| 8 | 256 | 4268.17 ms | 4.45 GB | 754.70 ms | 5.7x |
-| 1 | 512 | 8635.13 ms | 4.58 GB | 1836.34 ms | 4.7x |
-| 8 | 512 | 11932.61 ms | 4.19 GB | 1346.09 ms | 8.9x |
-
-Raw output:
+| seq | Go `simplego` | ONNX Runtime | Ratio |
+|---|---|---|---|
+| 128 | 2120.13 ms | 203.2 ms | 10.4x |
+| 256 | 4370.33 ms | 415.0 ms | 10.5x |
+| 512 | 9332.56 ms | 882.3 ms | 10.6x |
 
 ```
-### m3 fp32 batch=1 seq=512
-RESULT batch=1 seq=512 avg=8.635128313s per_pair=8635.13ms
-          4580147200  maximum resident set size
-### m3 fp32 batch=8 seq=512
-RESULT batch=8 seq=512 avg=1m35.460862417s per_pair=11932.61ms
-          4188815360  maximum resident set size
+=== CLEAN m3 fp32: Go simplego, batch 1
+RESULT batch=1 seq=128 avg=2.120126889s per_pair=2120.13ms
+RESULT batch=1 seq=256 avg=4.370326986s per_pair=4370.33ms
+RESULT batch=1 seq=512 avg=9.332561041s per_pair=9332.56ms
+=== CLEAN m3 fp32: ONNX Runtime, batch 1 (same process)
+ORT b1 seq=128 avg=203.2ms
+ORT b1 seq=256 avg=415.0ms
+ORT b1 seq=512 avg=882.3ms
 ```
 
-```
-$ ./venv/bin/python ort_bench.py onnx-m3/model.onnx
-inputs ['input_ids', 'attention_mask'] outputs ['logits']
-ORT batch=1 seq=128 avg=473.3ms per_pair=473.35ms
-ORT batch=8 seq=128 avg=3308.9ms per_pair=413.62ms
-ORT batch=1 seq=256 avg=1033.0ms per_pair=1032.98ms
-ORT batch=8 seq=256 avg=6037.6ms per_pair=754.70ms
-ORT batch=1 seq=512 avg=1836.3ms per_pair=1836.34ms
-ORT batch=8 seq=512 avg=10768.7ms per_pair=1346.09ms
-```
+Peak RSS for m3 fp32 at batch 1, seq 512, clean run: **3.60 GB**. An earlier
+contended run reported 4.58 GB.
 
-Three things follow, and the second is the one that matters most.
+**FALSIFIED: "the Go/ONNX Runtime gap narrows on larger models."** This spike
+originally reported 4.7-8.9x for m3 against D-008's 9-16x for the embedder and
+presented the narrowing as its one pleasant surprise. **It was an artifact of
+measuring the two backends in separate commands under different load.** The ORT
+baseline was inflated 2.1-2.5x, which halved every ratio.
 
-**The Go/ORT gap narrowed, not widened.** 4.7–8.9x here against 9–16x for the
-embedder. Larger matmuls suit `simplego`'s kernels better. This is the one
-result in the spike that is better than D-008 predicted, and it is irrelevant,
-because of the next point.
+Measured cleanly, the ratio is **10.4x, 10.5x, 10.6x** across three sequence
+lengths - flat, and squarely inside D-008's 9-16x band. There is no narrowing.
+The pure-Go penalty on a 567.8M-parameter cross-encoder is the same ~10x it is
+on a 33.2M-parameter embedder.
+
+The claim is kept rather than deleted because it reached the decision log, and
+because how it failed is more useful than the number: **a wrong ratio from
+contended measurement looks exactly like a real finding.** It arrived with a
+plausible mechanism attached - "larger matmuls suit `simplego`'s kernels
+better" - which made it easier to believe, not harder.
+
+Two things follow, and the first is the one that matters.
 
 **`bge-reranker-v2-m3` is not viable on CPU at all, in any language.** Fifty
-pairs at sequence 512 costs **67 seconds on ONNX Runtime with CGO** and **~10
-minutes in pure Go**. The build-tagged ORT escape hatch that D-008 established
-for bulk ingestion does not rescue this: it converts an impossible latency into
-a different impossible latency. The model choice in `tech-decisions.md` is
-wrong for a CPU-only deployment independent of the Go question.
+pairs at sequence 512 costs **44 seconds on ONNX Runtime with CGO** and
+**7.8 minutes in pure Go**. int8 is the best case available and still does not
+save it: 351 ms/pair on ONNX Runtime is **17.6 seconds** for fifty, and the
+same quantized graph is *slower* in pure Go (see
+[int8](#results-int8-quantization)). The build-tagged ORT escape hatch D-008
+established for bulk ingestion does not rescue this — it converts an impossible
+latency into a differently impossible one. The model choice in
+`tech-decisions.md` is wrong for a CPU-only deployment independent of the Go
+question.
 
-**Memory exceeds the deployment floor before anything else runs.** Peak RSS is
-2.74–4.58 GB for a *single* rerank batch, against the ~2 GB floor documented for
-CRED. Even at batch 1, seq 128, it is 3.44 GB.
+**Memory exceeds the deployment floor before anything else runs.** Clean peak
+RSS is **3.60 GB** for a single pair at sequence 512, against the ~2 GB floor
+documented for CRED. int8 brings it to 2.19 GB — still at the floor, with
+nothing left for Postgres, the server, or the embedder.
 
 ---
 
@@ -241,7 +280,10 @@ Pure Go, `simplego`, batch 1, sequence 512:
 | `jina-reranker-v1-turbo-en` | 37.8M | JinaBERT, 6L/384 | **1073.46 ms** | **793 MB** |
 | `jina-reranker-v1-turbo-en` int8 | — | — | 2059.45 ms | 488 MB |
 
-The fastest candidate, swept over the operating range:
+The fastest candidate, swept over the operating range. **These rows were
+measured under background load and are inflated roughly 1.5-2.4x** — the clean
+figures for the shapes that matter are in the next block; these are kept only
+to show the shape of the batch/sequence curve:
 
 ```
 jina fp32 b=1  s=128: RESULT batch=1  seq=128 avg=176.764187ms  per_pair=176.76ms
@@ -252,28 +294,26 @@ jina fp32 b=8  s=256: RESULT batch=8  seq=256 avg=3.426224354s  per_pair=428.28m
 jina fp32 b=25 s=256: RESULT batch=25 seq=256 avg=7.144374812s  per_pair=285.77ms
 ```
 
-And at the actual unit of work — one query's worth of candidates, wall clock:
+And at the actual unit of work — one query's worth of candidates, wall clock,
+clean machine:
 
 ```
-=== pure-Go simplego, jina-reranker-v1-turbo-en, realistic rerank workloads ===
-N=20 pairs seq=128: RESULT batch=20 seq=128 avg=5.172552041s  per_pair=258.63ms
-N=20 pairs seq=256: RESULT batch=20 seq=256 avg=7.638135021s  per_pair=381.91ms
-N=20 pairs seq=512: RESULT batch=20 seq=512 avg=19.694441833s per_pair=984.72ms
-N=50 pairs seq=128: RESULT batch=50 seq=128 avg=14.603065103s per_pair=292.06ms
-N=50 pairs seq=256: RESULT batch=50 seq=256 avg=22.663122458s per_pair=453.26ms
-N=50 pairs seq=512: RESULT batch=50 seq=512 avg=1m5.643578208s per_pair=1312.87ms
+=== CLEAN jina-reranker-v1-turbo-en, realistic rerank workloads
+RESULT batch=20 seq=128 avg=2.478544729s  per_pair=123.93ms
+RESULT batch=20 seq=256 avg=5.65574025s   per_pair=282.79ms
+RESULT batch=50 seq=128 avg=6.171238521s  per_pair=123.42ms
+RESULT batch=50 seq=256 avg=14.401982416s per_pair=288.04ms
 ```
 
-**5.2 seconds to rerank 20 candidates at sequence 128 — the most favourable
-configuration of the smallest credible model.** At the sequence length a code
-chunk actually needs, 19.7 seconds for 20 candidates. At the top of the range
-`tech-decisions.md` specifies, 50 candidates, it is 14.6 s at sequence 128,
-22.7 s at sequence 256, and 65.6 s at sequence 512.
+**2.5 seconds to rerank 20 candidates at sequence 128 — the most favourable
+configuration of the smallest credible model.** At 50 candidates, the top of
+the range `tech-decisions.md` specifies, it is 6.2 s at sequence 128 and 14.4 s
+at sequence 256.
 
-For scale: D-008 measured 51 ms to embed a query. Reranking would cost between
-**101x** (20 candidates, seq 128) and **1,287x** (50 candidates, seq 512) the
+For scale: D-008 measured 51 ms to embed a query. Reranking costs between
+**49x** (20 candidates, seq 128) and **282x** (50 candidates, seq 256) the
 retrieval step it is meant to refine, on the interactive path. No batching or
-sequence-length trade recovers two to three orders of magnitude.
+sequence-length trade recovers two orders of magnitude.
 
 ---
 
@@ -289,28 +329,73 @@ Dynamic int8 via `onnxruntime.quantization.quantize_dynamic(weight_type=QInt8)`,
 
 | Backend | Precision | per text | peak RSS |
 |---|---|---|---|
-| Go `simplego` | fp32 | 331.38 ms | 610 MB |
-| Go `simplego` | **int8** | **680.23 ms** | **231 MB** |
+| Go `simplego` | fp32 | 206.13 ms | 647 MB |
+| Go `simplego` | **int8** | **407.21 ms** | **290 MB** |
 | ONNX Runtime | fp32 | 32.33 ms | — |
 | ONNX Runtime | **int8** | **18.82 ms** | — |
 
 ```
-### bge-small model batch=8 seq=128
-RESULT batch=8 seq=128 avg=2.651000986s per_pair=331.38ms
-           610238464  maximum resident set size
-### bge-small model_int8 batch=8 seq=128
-RESULT batch=8 seq=128 avg=5.441832764s per_pair=680.23ms
-           231342080  maximum resident set size
+=== bge-small fp32 (clean, b8 s128)
+RESULT batch=8 seq=128 avg=1.649015208s per_pair=206.13ms
+           647069696  maximum resident set size
+=== bge-small int8 (clean, b8 s128)
+RESULT batch=8 seq=128 avg=3.257666958s per_pair=407.21ms
+           290406400  maximum resident set size
 
 ORT small/model.onnx      batch=8 seq=128 avg=258.6ms per_text=32.33ms
 ORT small/model_int8.onnx batch=8 seq=128 avg=150.5ms per_text=18.82ms
 ```
 
-int8 makes ONNX Runtime **1.72x faster** and `simplego` **2.05x slower**. The
-same inversion holds on both rerankers that ship a quantized ONNX:
-`jina-reranker-v1-turbo-en` 1073 ms → 2059 ms (1.92x slower),
-`mxbai-rerank-xsmall-v1` 2280 ms → 3870 ms (1.70x slower). Three models, one
-direction.
+The clean fp32 figure, **206.13 ms**, sits 7.5% under D-008's independently
+measured **222.9 ms** for the identical shape. A first, contended run of this
+same benchmark gave 331.38 ms — 1.49x above D-008 — and that mismatch is what
+exposed the measurement problem described under
+[Measurement conditions](#measurement-conditions) above.
+
+int8 makes ONNX Runtime **1.72x faster** and `simplego` **1.98x slower** on
+the embedder. The same inversion holds on every model tested. All rows below
+are **clean, paired** measurements - fp32 and int8 back-to-back in one command
+on an idle machine:
+
+| Model | Go fp32 | Go int8 | Go | Go RSS fp32 -> int8 |
+|---|---|---|---|---|
+| `bge-small-en-v1.5` (b8 s128) | 206 ms | 407 ms | **1.98x slower** | 647 -> 290 MB (2.23x) |
+| `jina-reranker-v1-turbo-en` (b1 s512) | 691 ms | 1347 ms | **1.95x slower** | 779 -> 557 MB (1.40x) |
+| `bge-reranker-v2-m3` (b1 s512) | 9510 ms | 21658 ms | **2.28x slower** | 3601 -> 2191 MB (1.64x) |
+
+On ONNX Runtime, paired in one process, the same graphs go the other way:
+
+| Model | ORT fp32 | ORT int8 | ORT |
+|---|---|---|---|
+| `bge-small-en-v1.5` (b8 s128) | 32.3 ms | 18.8 ms | **1.72x faster** |
+| `bge-reranker-v2-m3` (b1 s512) | 871.2 ms | 351.2 ms | **2.48x faster** |
+
+```
+=== CLEAN m3 fp32 vs int8, Go simplego, b1 s512
+RESULT batch=1 seq=512 avg=9.509654083s  per_pair=9509.65ms
+          3601399808  maximum resident set size
+RESULT batch=1 seq=512 avg=21.657833583s per_pair=21657.83ms
+          2190934016  maximum resident set size
+=== CLEAN m3 fp32 vs int8, ONNX Runtime, b1 s512 (same process)
+ORT m3 fp32 b1 s512 avg=871.2ms
+ORT m3 int8 b1 s512 avg=351.2ms
+```
+
+Three models, one direction in Go; two models, the opposite direction on ONNX
+Runtime. The `bge-reranker-v2-m3` row states the problem cleanly: the *same*
+quantized graph runs **2.48x faster** on ONNX Runtime and **2.28x slower** in
+pure Go. int8 is not a property of the model; it is a property of the backend's
+kernels, and `simplego` does not have them.
+
+**Correction.** Earlier drafts of this spike reported 2.05x / 1.92x / 1.70x /
+2.63x for the Go slowdowns and **5.57x** for the m3 ORT speedup. The three
+*paired* figures were close to correct - the clean re-runs give 1.98x and 1.95x
+against the original 2.05x and 1.92x, within 4%. The two that were badly wrong
+were the ones assembled from **separate commands**: m3's Go slowdown (2.63x
+claimed, 2.28x actual) and m3's ORT speedup (5.57x claimed, 2.48x actual). This
+is the same defect that produced the falsified "gap narrowed" finding above,
+and the pattern is consistent enough to state as a rule: **paired ratios
+survived contention; cross-command ratios did not.**
 
 The mechanism is visible in `onnx-gomlx` source. Dynamic quantization rewrites
 the graph — the quantized `bge-small` has 72 `MatMulInteger` and 48
@@ -339,9 +424,11 @@ instrumentation and was not done. The measurement stands regardless.
 
 Two consequences worth keeping:
 
-- **The memory result is real and useful.** 610 MB → 231 MB is a 2.6x cut in
-  the single largest consumer against CRED's ~2 GB floor. If the constraint is
-  memory rather than latency, int8 is the answer.
+- **The memory result is real and useful.** 647 MB → 290 MB on the embedder is
+  a 2.23x cut in the single largest consumer against CRED's ~2 GB floor, and
+  `bge-reranker-v2-m3` drops 3.60 GB → 2.19 GB (1.64x). If the constraint is
+  memory rather than latency, int8 is the answer. On disk the m3 graph goes
+  from 2.27 GB of external data to a single 570 MB file.
 - **int8 costs almost nothing in ranking quality.** On SciFact,
   `jina-reranker-v1-turbo-en` scored NDCG@10 0.7018 fp32 and 0.7014 int8 — a
   0.0004 difference. Quantization is not why the reranker plan fails.
@@ -565,6 +652,7 @@ reranker scoring on ONNX Runtime, `max_length=256`:
 ```
 config: NQ=100 K=50 maxlen=256
 BASELINE vector-only bge-small-en-v1.5: NDCG@10=0.6662 R@10=0.8050 R@50=0.9350
+m3:        NDCG@10=0.7122 delta=+0.0460 [5000 pairs, 2353s, 471 ms/pair on ORT]
 jina:      NDCG@10=0.7018 delta=+0.0356 [5000 pairs,  121s, 24 ms/pair on ORT]
 jina_int8: NDCG@10=0.7014 delta=+0.0353 [5000 pairs,   61s, 12 ms/pair on ORT]
 mxbai:     NDCG@10=0.6415 delta=-0.0246 [5000 pairs,  262s, 52 ms/pair on ORT]
@@ -574,34 +662,42 @@ mxbai_q:   NDCG@10=0.6380 delta=-0.0282 [5000 pairs,  166s, 33 ms/pair on ORT]
 | Method | NDCG@10 | vs vector-only |
 |---|---|---|
 | Vector only (`bge-small-en-v1.5`) | 0.6662 | — |
-| `jina-reranker-v1-turbo-en` fp32 | **0.7018** | **+0.0356** |
+| `bge-reranker-v2-m3` fp32 (unshippable) | **0.7122** | **+0.0460** |
+| `jina-reranker-v1-turbo-en` fp32 | 0.7018 | +0.0356 |
 | `jina-reranker-v1-turbo-en` int8 | 0.7014 | +0.0353 |
 | ColBERT-style MaxSim, `bge-small` | 0.6955 | +0.0293 |
 | `mxbai-rerank-xsmall-v1` fp32 | 0.6415 | **−0.0246** |
 | `mxbai-rerank-xsmall-v1` int8 | 0.6380 | −0.0282 |
 
-`bge-reranker-v2-m3` and `bge-reranker-base` are absent from this table by
-design: both had already been excluded on latency by an order of magnitude
-before quality mattered. Scoring 5,000 pairs with `bge-reranker-v2-m3` costs
-over an hour on ONNX Runtime alone, which is itself the finding. Their NDCG is
-**UNVERIFIED**. Nothing in the verdict depends on it — even if
-`bge-reranker-v2-m3` scored substantially above `jina-reranker-v1-turbo-en`, it
-cannot be run at interactive latency on a CPU in any language.
+**`bge-reranker-v2-m3` is the best reranker measured, and it is still
+unshippable.** It scores +0.0460 — 29% more gain than
+`jina-reranker-v1-turbo-en` and 57% more than ColBERT MaxSim. Its own
+evaluation is the argument against it: scoring 5,000 pairs took **2,353 s at
+471 ms/pair on ONNX Runtime**, and that is the fast backend with CGO. The
+quality is real; it cannot be delivered inside an interactive call on a CPU.
+
+This is the honest shape of the trade. Cutting the cross-encoder is not free,
+and this document should not be read as claiming it is.
+
+`bge-reranker-base` remains absent — its evaluation was lost to the
+truncated-download incident below and not re-run once its 4671.91 ms/pair in
+pure Go had excluded it. Its NDCG is **UNVERIFIED**.
 
 **`mxbai-rerank-xsmall-v1` makes ranking worse than not reranking at all.** It
 is 1.9x the parameters of `jina-reranker-v1-turbo-en`, 2.1x the pure-Go
 latency, needs 39 ONNX op types instead of 27, and it costs 0.025 NDCG@10. This
 is not a hypothetical failure mode; it is a published, actively downloaded
-reranker. Do not use it. More generally: model size does not
-predict rerank quality, and any reranker adopted
-into CRED must be measured against the vector-only baseline on a labelled set
-before it ships, not selected from a leaderboard.
+reranker. Do not use it. More generally: model size does not predict rerank
+quality — the ordering here is 567.8M > 37.8M > 70.8M — and any reranker
+adopted into CRED must be measured against the vector-only baseline on a
+labelled set before it ships, not selected from a leaderboard.
 
 The headroom that reranking is competing for is small. Recall@50 is 0.9350 and
 Recall@10 is 0.8050, so the first stage has already found 93.5% of the relevant
 documents; reranking can only reorder within that. The gap from the vector-only
-baseline to a perfect NDCG@10 of 1.0 is 0.3338, and the best cross-encoder
-closes 0.0356 of it — about 11%.
+baseline to a perfect NDCG@10 of 1.0 is 0.3338. The best reranker measured
+closes 0.0460 of it (13.8%); the best CPU-feasible one closes 0.0356 (10.7%);
+ColBERT MaxSim closes 0.0293 (8.8%).
 
 ### ColBERT-style late interaction
 
@@ -620,17 +716,18 @@ ColBERT-style MaxSim over bge-small token vectors: NDCG@10=0.6955
          delta=+0.0293  [scoring only 0.05 ms/pair]
 ```
 
-**+0.0293 NDCG@10 — 82% of the cross-encoder's gain — at 0.05 ms per pair.**
-That is **5,841x** cheaper than `jina-reranker-v1-turbo-en` on `simplego`
-(292.06 ms/pair over 50 candidates) and **480x** cheaper than it on ONNX
-Runtime (24 ms/pair). Fifty candidates score in **2.5 ms** against 14,603 ms —
+**+0.0293 NDCG@10 — 82% of the best CPU-feasible cross-encoder's gain, 64% of
+`bge-reranker-v2-m3`'s — at 0.05 ms per pair.**
+That is **2,468x** cheaper than `jina-reranker-v1-turbo-en` on `simplego`
+(123.42 ms/pair over 50 candidates, clean) and **480x** cheaper than it on ONNX
+Runtime (24 ms/pair). Fifty candidates score in **2.5 ms** against 6,171 ms —
 inside the recall budget rather than two orders of magnitude over it.
 
 One caveat that belongs next to the number rather than in a footnote:
 `bge-small-en-v1.5` was **not trained for late interaction**. ColBERT models are
 trained with a MaxSim objective; this is MaxSim applied opportunistically to
-token vectors from a model trained for CLS pooling. That it recovers 82% of the
-cross-encoder gain anyway is the result, but it means the behaviour has no
+token vectors from a model trained for CLS pooling. That it recovers most of
+the cross-encoder gain anyway is the result, but it means the behaviour has no
 guarantee behind it beyond this measurement, and it may not hold on a different
 corpus. A purpose-trained late-interaction model would be the principled
 version and would reopen the tokenizer and inference questions this option
@@ -718,13 +815,6 @@ fail.
 - **UNVERIFIED: `bge-reranker-base` quality.** Its evaluation run was lost to
   the truncated-tokenizer incident above and not re-run, because its measured
   4671.91 ms/pair in pure Go had already excluded it. Its NDCG is unknown.
-- **UNVERIFIED: `bge-reranker-v2-m3` int8 latency.** The quantization itself
-  succeeded — `quantize_dynamic` collapsed the 2.27 GB external-data model to a
-  single 569,622,599-byte file in 30.2 s — but the resulting graph was not
-  benchmarked within this spike. Given the three-model result that int8 is
-  slower in `simplego`, and that the fp32 model is already 4.7x over budget on
-  *ONNX Runtime with CGO*, int8 would have to deliver roughly 30x to change the
-  conclusion. Nothing measured here suggests it can.
 - **UNVERIFIED: non-Apple-Silicon hardware.** All timings are one M1 Pro, as in
   D-008. Ratios travel better than absolutes.
 - **UNVERIFIED: LLM reranking quality and cost.** Fallback (d) below is
@@ -743,9 +833,13 @@ No pure-Go cross-encoder is viable. The four options, with costs.
 
 ### (a) Drop cross-encoder reranking from v1
 
-**Retrieval quality lost: 0.0356 NDCG@10 on SciFact** — the full measured
-cross-encoder gain, since nothing replaces it. Recall is untouched: reranking
+**Retrieval quality lost: 0.0460 NDCG@10 on SciFact** against the best
+reranker measured, or 0.0356 against the best one that could plausibly run on a
+CPU — the full gain, since nothing replaces it. Recall is untouched: reranking
 reorders a fixed candidate set, so Recall@50 stays 0.9350.
+
+This is the option's real cost and it is not negligible: it is roughly a
+seventh of the distance from the current baseline to a perfect NDCG@10.
 
 The Matryoshka `halfvec` two-stage approach in `tech-decisions.md` is *not* a
 substitute and should not be described as one. It is a **cost** optimization —
@@ -776,10 +870,10 @@ than not shipping the feature, and it contradicts D-008's own condition that
 
 And the numbers do not clear the bar even with the tag on. ORT gives 24 ms/pair
 for `jina-reranker-v1-turbo-en`, so 50 candidates is 1.2 s — tolerable — but
-`bge-reranker-v2-m3`, the model `tech-decisions.md` names, is 67 s for the same
-work *with* ORT. The build tag can only ship the small model, whose entire
-advantage over ColBERT MaxSim is 0.0063 NDCG@10, for the cost of glibc, QEMU,
-and a second image.
+`bge-reranker-v2-m3`, the model `tech-decisions.md` names, is 44 s for the same
+work *with* ORT, and 17.6 s even quantized to int8. The build tag can therefore
+only ship the small model, whose entire advantage over ColBERT MaxSim is 0.0063
+NDCG@10, for the cost of glibc, QEMU, and a second image.
 
 **Rejected. Not because the mechanism is wrong, but because it buys 0.0063
 NDCG@10 for the packaging strategy.**
@@ -787,10 +881,13 @@ NDCG@10 for the packaging strategy.**
 ### (c) Hosted reranking API
 
 Cheapest to build, and the only option not bounded by what a CPU can run
-locally. No hosted reranker was benchmarked in this spike, so its quality
-advantage over ColBERT MaxSim is **UNVERIFIED here**. `tech-decisions.md`
-already establishes the pattern for embeddings: both hosted and local
-supported, neither mandatory.
+locally. The `bge-reranker-v2-m3` result gives this option a measured floor
+rather than a hopeful one: a large cross-encoder is worth **+0.0460 NDCG@10**
+here, 57% more than ColBERT MaxSim — and a hosted service is not constrained by
+the CPU budget that makes that model unusable locally. No hosted reranker was
+called in this spike, so any specific vendor's quality and latency are
+**UNVERIFIED**. `tech-decisions.md` already establishes the pattern for
+embeddings: both hosted and local supported, neither mandatory.
 
 The cost is the one the positioning cannot absorb if it becomes the default.
 Air-gapped operation is the sovereignty argument, and a recall path that
@@ -827,8 +924,9 @@ same labelled set as this spike.**
 
 Not in the original list; it emerged as the strongest candidate.
 
-- **+0.0293 NDCG@10**, 82% of the cross-encoder gain.
-- **0.05 ms/pair.** 50 candidates in 2.5 ms, versus 14,603 ms for the fastest
+- **+0.0293 NDCG@10** — 82% of the best CPU-feasible cross-encoder's gain,
+  64% of `bge-reranker-v2-m3`'s.
+- **0.05 ms/pair.** 50 candidates in 2.5 ms, versus 6,171 ms for the fastest
   pure-Go cross-encoder on the same 50 candidates at seq 128.
 - **No new model, no new tokenizer, no new ONNX graph.** It reuses
   `bge-small-en-v1.5` and the WordPiece tokenizer D-008 already verified at
@@ -850,34 +948,43 @@ the corpus needs re-embedding.
 > vectors CRED already produces.**
 >
 > `bge-reranker-v2-m3` runs in pure Go — no missing op, no OOM — and is
-> unshippable regardless: **8.6 s per pair at sequence 512, 4.58 GB peak RSS**,
-> and **1.8 s per pair even on ONNX Runtime with CGO**. Fifty candidates cost
-> ~10 minutes in Go and 67 seconds with the escape hatch. This is a CPU
+> unshippable regardless: **9.3 s per pair at sequence 512, 3.60 GB peak RSS**,
+> and **882 ms per pair even on ONNX Runtime with CGO**. Fifty candidates cost
+> **7.8 minutes** in Go and **44 seconds** with the escape hatch. This is a CPU
 > feasibility failure, not a Go failure, and `tech-decisions.md`'s model choice
 > is wrong independent of language.
 >
 > The smallest credible substitute, `jina-reranker-v1-turbo-en` at 37.8M
-> parameters, needs **5.2 s to rerank 20 candidates at sequence 128** in pure
-> Go — the most favourable configuration measured — and **14.6 s for 50**,
-> against 51 ms to embed the query. Two orders of magnitude over budget, with
-> no batching or sequence-length trade that recovers it.
+> parameters, needs **2.5 s to rerank 20 candidates at sequence 128** in pure
+> Go — the most favourable configuration measured — and **6.2 s for 50**,
+> against 51 ms to embed the query. 49x to 282x over budget, with no batching
+> or sequence-length trade that recovers it.
 >
-> ColBERT MaxSim delivers **+0.0293 NDCG@10 against +0.0356 for the best
-> cross-encoder — 82% of the gain — at 0.05 ms/pair**, using a model and a
-> tokenizer that are already verified. It costs **242x storage per document**,
-> measured and uncompressed, and that is the decision to argue about.
+> ColBERT MaxSim delivers **+0.0293 NDCG@10 at 0.05 ms/pair**, using a model
+> and a tokenizer that are already verified. It costs **242x storage per
+> document**, measured and uncompressed, and that is the decision to argue
+> about.
+>
+> **The cut is not free, and this verdict does not pretend otherwise.**
+> `bge-reranker-v2-m3` is genuinely the best reranker measured (+0.0460), and
+> ColBERT MaxSim gives up **0.0167 NDCG@10** against it and 0.0063 against
+> `jina-reranker-v1-turbo-en`. That is the price of a CPU-only, air-gapped,
+> statically linked deployment. It is a price worth naming rather than
+> obscuring — and the moment CRED targets a GPU, this analysis should be
+> reopened, because the quality is there if the compute is.
 
 Four findings that must not be lost:
 
 1. **A reranker can make ranking worse.** `mxbai-rerank-xsmall-v1` scored
-   **−0.0246 NDCG@10** against no reranking, while being larger and slower than
-   the model that scored +0.0356. Any reranker adopted into CRED must beat the
-   vector-only baseline on a labelled set before it ships.
+   **−0.0246 NDCG@10** against no reranking, while being 1.9x larger and 2.1x
+   slower than `jina-reranker-v1-turbo-en`, which scored +0.0356. Any reranker
+   adopted into CRED must beat the vector-only baseline on a labelled set
+   before it ships.
 2. **int8 is a memory lever, not a latency lever — in `simplego` it is
-   negative.** 2.05x slower on `bge-small`, 1.92x on `jina`, 1.70x on `mxbai`,
-   while ONNX Runtime gets 1.72x *faster*. It does cut RSS 2.6x (610 → 231 MB)
-   at a 0.0004 NDCG cost. D-008's expectation that int8 would narrow the 12x
-   gap is **FALSIFIED**.
+   negative.** 1.95x to 2.28x slower across three models, while the same
+   quantized graphs run 1.72x to **2.48x faster** on ONNX Runtime. It does cut
+   RSS 1.4–2.2x at a 0.0004 NDCG cost. D-008's expectation that int8 would
+   narrow the ~10x gap is **FALSIFIED** — it widens it.
 3. **The SentencePiece tokenizer is a much bigger problem than WordPiece was,
    and the D-008 mitigation does not scale to it.** Probing enumerates a
    per-codepoint predicate; it cannot enumerate a 237 KB string-to-string Darts
@@ -897,9 +1004,9 @@ Four findings that must not be lost:
 - **Measured token-vector compression.** If int8 or binary quantization of
   ColBERT token vectors preserves the +0.0293 at 8–32x less storage, the only
   real objection to (e) mostly disappears. This is the highest-value follow-up.
-- **A code-retrieval evaluation that reverses the ordering.** SciFact is not
-  code. If a cross-encoder's advantage over MaxSim is much larger on code than
-  the 0.0063 measured here, option (b) or (c) gets re-argued with a real
+- **A code-retrieval evaluation that widens the gap.** SciFact is not code. If
+  a cross-encoder's advantage over MaxSim is much larger on code than the
+  0.0063–0.0167 measured here, option (b) or (c) gets re-argued with a real
   number behind it.
 - **Vector-only quality proving insufficient in use.** The trigger for
   revisiting (c) hosted reranking or (d) LLM reranking. Both should be measured

@@ -9,6 +9,8 @@ evidence does.
   found, what it killed, and what survives. Read this first.
 - [Decision log](research/decision-log.md) — decisions made, with reasoning and
   what each rules out.
+- **[Demand test](research/demand-test.md)** — the instrument for the cheapest
+  disconfirmation available: whether anyone actually wants this.
 
 ## Product
 
@@ -19,6 +21,8 @@ evidence does.
 
 ## Implementation
 
+- **[v0 harness](../v0/README.md)** — the built experiment, its stages, and what
+  an operator must supply to start it.
 - **[v0 experiment design](research/spikes/v0-experiment-design.md)** — the
   experiment that runs before any product code, its pre-registered kill
   threshold, and why the existing benchmark does not settle the question.

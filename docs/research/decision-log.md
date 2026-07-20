@@ -602,26 +602,75 @@ D-008 left the reranker as its largest open risk, on the theory that a larger
 model might not survive pure Go. That framing was wrong in an instructive way.
 
 `bge-reranker-v2-m3` **does** run in pure Go. No missing op, no OOM; `simplego`
-executes all 26 op types, and the Go/ONNX Runtime gap actually **narrowed** to
-4.7–8.9x from D-008's 9–16x. It is still unusable: **1.8 s per pair on ONNX
-Runtime with CGO**, or 67 s for 50 candidates. The model is infeasible on CPU
-regardless of language, so the previous choice was wrong independently of Go.
+executes all 26 op types. It is still unusable: **871 ms per pair on ONNX
+Runtime with CGO** at batch 1 / seq 512, roughly 44 s for 50 candidates. The
+model is infeasible on CPU regardless of language, so the previous choice was
+wrong independently of Go.
+
+> **RETRACTED, 2026-07-20.** This entry originally claimed the Go/ONNX Runtime
+> gap **narrowed to 4.7–8.9x** from D-008's 9–16x, and cited 1.8 s per pair and
+> 67 s for 50 candidates. Both came from an ORT fp32 baseline inflated 2.1–2.5x
+> by CPU contention. Measured clean, both backends in one command on an idle
+> machine, the ratio is **flat at 10.4–10.6x across seq 128/256/512** —
+> squarely inside D-008's range. There is no narrowing.
+>
+> The claim is withdrawn rather than adjusted, because it was presented as a
+> finding and it was an artifact. Worth noting *why* it was seductive: it
+> arrived with a plausible mechanism attached — "larger matmuls suit
+> `simplego`'s kernels" — which made it easier to believe rather than harder.
 
 No substitute clears the bar. The fastest, `jina-reranker-v1-turbo-en` at 37.8M
-parameters, needs **5.2 s for 20 candidates** at seq 128 — against 51 ms to
-embed the query. Between 101x and 1,287x over budget.
+parameters, needs **2.5 s for 20 candidates** at seq 128 and 6.2 s for 50 —
+against 51 ms to embed the query. Between **49x and 282x over budget**.
 
-MaxSim delivers **+0.0293 NDCG@10 against the cross-encoder's +0.0356** — 82% of
-the gain at **1/5,841th the cost**, 0.05 ms per pair.
+MaxSim delivers **+0.0293 NDCG@10** at **1/5,841th the cost**, 0.05 ms per pair.
+
+The price is named rather than buried. `bge-reranker-v2-m3` is genuinely the
+best reranker measured, and MaxSim gives up **0.0167 NDCG@10** against it:
+
+| Method | NDCG@10 | Δ vs vector only |
+|---|---|---|
+| Vector only | 0.6662 | — |
+| `bge-reranker-v2-m3` | **0.7122** | **+0.0460** |
+| `jina-reranker-v1-turbo-en` | 0.7018 | +0.0356 |
+| ColBERT MaxSim | 0.6955 | +0.0293 |
+| `mxbai-rerank-xsmall-v1` | 0.6415 | −0.0246 |
+
+That 0.0167 is the cost of a CPU-only, air-gapped, statically linked
+deployment. **It should be reopened the moment CRED targets a GPU** — this is a
+constraint-driven decision, not a claim that MaxSim is better.
+
+Size does not predict quality: the ordering was 567.8M > 37.8M > 70.8M.
 
 ### What this rules out
 
 - Any cross-encoder in the interactive path on CPU, at any model size tested.
 - **int8 quantization as a latency lever in pure Go.** D-008 flagged it as the
-  obvious unpulled lever; it is **2.05x slower**, not faster, because
-  `onnx-gomlx` widens both int8 operands to int32 before multiplying
-  (`ops.go:2967`). ONNX Runtime gets 1.72x faster on the same models. It remains
-  a **memory** lever: 2.6x RSS reduction (610 → 231 MB) at 0.0004 NDCG cost.
+  obvious unpulled lever.
+
+  > **Corrected from clean paired re-runs, 2026-07-20.** The first measurements
+  > were taken while an unrelated sweep occupied the same CPU. Every multiplier
+  > shrank, and every one held its direction:
+  >
+  > | Claim | First reported | Clean |
+  > |---|---|---|
+  > | int8 slower, `bge-small` | 2.05x | **1.98x** |
+  > | int8 slower, m3 | 2.63x | **2.28x** |
+  > | ORT int8 speedup, m3 | 5.57x | **2.48x** |
+  > | RSS cut, `bge-small` | 2.64x | **2.23x** |
+  > | RSS cut, m3 | 2.21x | **1.64x** |
+  >
+  > `bge-small` fp32 absolute fell from 331.38 ms to **206.13 ms**, now
+  > consistent with D-008's independent 222.9 ms. The direction never moved:
+  > `jina` and `mxbai` were measured back-to-back in a single command, so their
+  > ratios were never cross-command and never distorted.
+
+  It is **roughly 2x slower** across four models, not
+  faster, because `onnx-gomlx` widens both int8 operands to int32 before
+  multiplying (`ops.go:2967`). The cleanest evidence is m3: the **same quantized
+  graph** runs **2.48x faster** on ONNX Runtime and **2.28x slower** in pure Go.
+  Quantization therefore **widens** the Go/ORT gap rather than narrowing it. It
+  remains a **memory** lever: 1.6–2.2x RSS reduction at 0.0004 NDCG cost.
 - Trusting an available Go SentencePiece tokenizer. `eliben/go-sentencepiece`
   refuses the model (`model type UNIGRAM not supported`). `sugarme/tokenizer`
   scores 96.22% with 948 hard panics, fails **100% of inputs containing two
@@ -643,11 +692,35 @@ This is not a formality: `mxbai-rerank-xsmall-v1` scored **−0.0246 NDCG@10**,
 actively worse than no reranking, while being 1.9x larger and 2.1x slower than
 the model that scored +0.0356.
 
-### Unverified
+### Correction, 2026-07-20
 
-`bge-reranker-v2-m3`'s own NDCG and its int8 benchmark were still running when
-the spike closed. Neither is load-bearing — m3 is excluded on latency by an
-order of magnitude regardless of its quality.
+This entry was first written from an incomplete draft: `bge-reranker-v2-m3`'s
+own NDCG and its int8 benchmark were still running and were recorded here as
+unverified. Both have since landed, and all three affected numbers moved — the
+MaxSim quality gap (0.0063 implied → **0.0167** measured against m3), the int8
+slowdown, and the ORT int8 speedup.
+
+Then a second correction, from the spike's own re-check: those replacement
+numbers were themselves measured under CPU contention. Clean paired re-runs
+moved every multiplier and **retracted one finding outright** — the claimed
+narrowing of the Go/ORT gap, which was an artifact of an inflated fp32
+baseline. Final figures are inline above and in the spike document.
+
+Two procedural lessons, both cheap and both now paid for:
+
+1. **Do not write a decision from a spike that is still running.** This entry
+   was authored from an incomplete draft.
+2. **Pin measurement conditions before quoting a ratio.** Ratios measured
+   back-to-back in one command survived the contention; cross-command
+   comparisons did not. The error was caught only because D-008 had recorded an
+   independent baseline for the same configuration — an apparently redundant
+   number that turned out to be the control.
+
+The decision never moved. Even with every figure corrected downward, the fastest
+pure-Go cross-encoder is **49x over budget at its most favourable
+configuration**, and m3 needs 44 s for 50 candidates on the *fast* backend. No
+measurement error of this size reaches that. NDCG results are unaffected —
+those are deterministic.
 
 ### Process note
 
