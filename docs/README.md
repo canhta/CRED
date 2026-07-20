@@ -1,7 +1,7 @@
 # CRED Documentation
 
-CRED is an open-source context, memory, and execution harness for AI-driven
-development teams.
+CRED is evidence-governed memory for AI agents. A claim lives only while its
+evidence does.
 
 ## Start here
 
@@ -19,6 +19,11 @@ development teams.
 
 ## Implementation
 
+- **[v0 experiment design](research/spikes/v0-experiment-design.md)** — the
+  experiment that runs before any product code, its pre-registered kill
+  threshold, and why the existing benchmark does not settle the question.
+- [Go embeddings and tokenizer](research/spikes/go-embeddings-tokenizer.md) —
+  the spike that decides whether the product can be written in Go at all.
 - [Technical decisions](research/spikes/tech-decisions.md) — language,
   datastore, queue, and the failure modes each choice implies.
 - [Language and MCP](research/spikes/tech-language-and-mcp.md) — runtime

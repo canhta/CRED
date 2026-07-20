@@ -419,12 +419,25 @@ Evaluation is a deliverable, not a phase. It is also the kill criterion.
 
 ### First experiment, before anything is built
 
-**Does retrieved memory beat plain long context?** An unreplicated but
-**unrebutted** benchmark reports comparable systems as 14–77x more expensive and
-31–33% less accurate than simply using a long context window.
+**Does retrieved memory beat plain long context?** Nobody has answered this for
+the case CRED cares about. The one benchmark that exists — a single blog post
+measuring Mem0 and Zep on conversational fact recall — reports them as far more
+expensive and materially less accurate than passing the full history. It is
+unreplicated, single-model, published by a vendor in the same category, and its
+long-context arm averaged roughly 4,000 input tokens, which does not test long
+context at all. It is unrebutted only in the sense that almost nobody read it.
 
-If that holds, CRED is wrong — and so is every competitor. It is cheap to test
-and existential, so it runs first. Either outcome produces a publishable result.
+So the benchmark does not settle the question against CRED. It does something
+worse: it shows the question is open and unmeasured while the entire category
+sells as though it were closed. That is why the experiment runs before any
+product code, and why CRED runs it at a context length that can actually lose.
+
+If retrieved memory does not win, CRED is wrong — and so is every competitor.
+It is cheap to test and existential. Either outcome produces a publishable
+result.
+
+Design, pre-registered thresholds, and the full teardown of the existing
+benchmark: [v0 experiment design](../research/spikes/v0-experiment-design.md).
 
 ### The evaluation the category has not published
 

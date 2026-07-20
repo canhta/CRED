@@ -15,7 +15,13 @@
 
 - **The pain is real but narrower than the pitch.** *Single-developer, cross-session amnesia* and *instruction-file staleness* are abundantly and vividly documented. The *organizational, multi-person* dimension — CRED's actual thesis — is **thinly documented**. Only two genuine non-vendor quotes on team divergence were found. **VERIFIED asymmetry:** of ~30 HN hits for agent memory, roughly **20 were founders announcing their own memory product**. Many sellers, few organic buyers using those words. Treat this as the most important finding in the document.
 
-- **The strongest disconfirming artifact is a benchmark, and it is bad news.** Memory layers (Mem0, Zep) measured **14–77× more expensive and 31–33% less accurate** at fact recall than simply passing full history to long context ([HN 46032522](https://news.ycombinator.com/item?id=46032522)). Unreplicated and single-model — but unanswered. A visible 2026 counter-current argues the whole customization stack is last year's idea: *"Making a huge custom setup is so 2025."*
+- **The strongest disconfirming artifact is a benchmark, and it is bad news.** Memory layers (Mem0, Zep) measured **14–77× more expensive and 31–33% less accurate** at fact recall than simply passing full history to long context ([HN 46032522](https://news.ycombinator.com/item?id=46032522)). Unreplicated and single-model. **Correction, 2026-07-20:** this entry originally
+called the benchmark "unanswered," implying it had survived scrutiny. It had not
+been read — three HN submissions scored 4, 4, and 2 points, with one comment, by
+the author. Its long-context arm averaged ~4,232 input tokens, and the cited
+ratios do not reconcile with its own published table. The figures above are
+retained as the claim that was made; see
+[v0 experiment design](../spikes/v0-experiment-design.md) for the teardown. A visible 2026 counter-current argues the whole customization stack is last year's idea: *"Making a huge custom setup is so 2025."*
 
 - **State of practice is committed markdown plus executable guardrails, not memory servers.** **VERIFIED via GitHub code search (2026-07-20): AGENTS.md = 154,496 files; CLAUDE.md = 51,100; .cursorrules = 7,208; copilot-instructions.md = 4,064.** AGENTS.md now outnumbers CLAUDE.md ~3:1 — the standard is consolidating. The most-reported *fix* practitioners describe is not memory but lint rules, types, tests, and hooks. **No major survey (Stack Overflow, DORA, Octoverse, JetBrains) asks how teams share agent context.** That number does not exist publicly.
 
