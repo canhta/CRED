@@ -53,6 +53,7 @@ URLs. Repository scans read actual source code rather than documentation.
 | [langfuse.md](research/evidence/langfuse.md) | Tracing, prompt versioning, evaluation | 593 lines |
 | [ragflow.md](research/evidence/ragflow.md) | Document parsing, citation model | 434 lines |
 | [context7.md](research/evidence/context7.md) | The most-installed MCP server: how it won distribution | 737 lines |
+| [eval-methodology-prior-art.md](research/evidence/eval-methodology-prior-art.md) | Model config, baselines, judges, cost accounting across memory evals | 648 lines |
 | [mem0.md](research/evidence/mem0.md) | Memory layer, write path, governance | 425 lines |
 | [letta.md](research/evidence/letta.md) | Context hierarchy, memory blocks, agent state | 330 lines |
 
