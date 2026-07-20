@@ -9,22 +9,48 @@
     "reverted": "\\b(was reverted|reverted because|had to revert|we reverted|this broke|caused an (outage|incident|regression))\\b"
   },
   "anchors_path": "v0/mining/anchors.jsonl",
-  "anchors_total": 24,
+  "anchors_total": 11,
   "disclosure_T7": "Repository and cutoff selection is not blinded. The founder chose these repositories and this cutoff. The reasons are recorded above, including the known bias risk of each choice.",
   "min_anchor_chars": 80,
   "mined_at": "2026-07-20T09:52:24Z",
+  "pattern_revisions": [
+    {
+      "date": "2026-07-20",
+      "effect_on_existing_anchors": "Anchors mined before this change are unaffected on disk. Re-run `mine` to apply it; several cockroachdb anchors matched only on this alternative and will drop out.",
+      "now": "...|we('ve| have) always|we('ve| have) never)",
+      "pattern": "convention",
+      "reason": "The bare `we always` / `we never` alternatives matched forward-looking review requests \u2014 e.g. 'assert that we never see an event that is older than the checkpoint' \u2014 which are proposals about future code, not references to an established convention. Requiring the present-perfect ('we have never', \"we've always\") restricts the match to statements about existing practice, which is what the pattern was for.",
+      "was": "...|we always|we never)"
+    }
+  ],
+  "provenance_note": "Anchors were mined with an earlier version of ANCHOR_PATTERNS, then re-filtered in place against the corrected patterns (see pattern_revisions and refilter). Counts below are POST-refilter and are the ones consistent with the code. 13 of the 24 originally mined anchors were false positives of the loose `convention` alternative.",
   "prs_per_repo_cap": 45,
+  "refilter": {
+    "anchors_at_truncation_limit": 1,
+    "anchors_dropped": 13,
+    "anchors_in": 24,
+    "anchors_kept": 11,
+    "by_repo_kept": {
+      "backstage/backstage": 3,
+      "cockroachdb/cockroach": 4,
+      "open-telemetry/opentelemetry-collector": 4
+    },
+    "limitation": "Matching is against the stored (truncated) text, not the original comment body. An anchor whose only match lay past MAX_ANCHOR_CHARS is dropped here though the miner would have kept it; 1 anchors are at the truncation limit and could be affected.",
+    "method": "re-applied current ANCHOR_PATTERNS to stored anchor text; no new API calls",
+    "patterns_changed_on_kept": 0,
+    "refiltered_at": "2026-07-20T10:11:09Z"
+  },
   "repositories": [
     {
       "anchor_window_end": "2026-07-01T00:00:00Z",
-      "anchors": 4,
+      "anchors": 3,
+      "anchors_per_pr": 0.067,
       "by_kind": {
         "issue_comment": 1,
         "pr_body": 1,
-        "review_comment": 2
+        "review_comment": 1
       },
       "by_pattern": {
-        "convention": 1,
         "historical_why": 1,
         "prior_decision": 2
       },
@@ -36,12 +62,13 @@
     },
     {
       "anchor_window_end": "2026-07-01T00:00:00Z",
-      "anchors": 15,
+      "anchors": 4,
+      "anchors_per_pr": 0.089,
       "by_kind": {
-        "review_comment": 15
+        "review_comment": 4
       },
       "by_pattern": {
-        "convention": 13,
+        "convention": 2,
         "historical_why": 2
       },
       "cutoff_t": "2026-01-01T00:00:00Z",
@@ -52,14 +79,14 @@
     },
     {
       "anchor_window_end": "2026-07-01T00:00:00Z",
-      "anchors": 5,
+      "anchors": 4,
+      "anchors_per_pr": 0.089,
       "by_kind": {
         "issue_comment": 1,
         "pr_body": 1,
-        "review_comment": 3
+        "review_comment": 2
       },
       "by_pattern": {
-        "convention": 1,
         "cross_ref": 1,
         "historical_why": 1,
         "moved_away": 1,
@@ -71,5 +98,6 @@
       "repo": "open-telemetry/opentelemetry-collector",
       "selection_reason_T7": "Chosen as a third, smaller repository (7k stars vs 32k/34k) to test whether the effect survives outside very large projects, with docs/rfcs present and a specification-driven review culture that produces explicit 'we decided X because Y' comments. Risk: it is governed by an external specification, so some 'decisions' are inherited rather than made locally."
     }
-  ]
+  ],
+  "run_complete": true
 }

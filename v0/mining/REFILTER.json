@@ -1,0 +1,108 @@
+{
+  "anchors_at_truncation_limit": 1,
+  "anchors_dropped": 13,
+  "anchors_in": 24,
+  "anchors_kept": 11,
+  "by_repo_kept": {
+    "backstage/backstage": 3,
+    "cockroachdb/cockroach": 4,
+    "open-telemetry/opentelemetry-collector": 4
+  },
+  "dropped_detail": [
+    {
+      "anchor_id": "anc-c6e9be4ec464",
+      "repo": "backstage/backstage",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-adcb8e5d06aa",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-7c1a1f0bafdc",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-c6ab6a40e6e5",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-f82472f41129",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-e22b2654f919",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-1faee6e2c765",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-2c555fda56ee",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-a10ed15367a7",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-08673497294d",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-7cc834121d32",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-56e01170ad8f",
+      "repo": "cockroachdb/cockroach",
+      "was": [
+        "convention"
+      ]
+    },
+    {
+      "anchor_id": "anc-7e0f93510ef9",
+      "repo": "open-telemetry/opentelemetry-collector",
+      "was": [
+        "convention"
+      ]
+    }
+  ],
+  "limitation": "Matching is against the stored (truncated) text, not the original comment body. An anchor whose only match lay past MAX_ANCHOR_CHARS is dropped here though the miner would have kept it; 1 anchors are at the truncation limit and could be affected.",
+  "method": "re-applied current ANCHOR_PATTERNS to stored anchor text; no new API calls",
+  "patterns_changed_on_kept": 0,
+  "refiltered_at": "2026-07-20T10:11:09Z"
+}

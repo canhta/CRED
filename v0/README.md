@@ -245,30 +245,44 @@ repositories in §10 of `preregistration.md`. Drafting onward has not — there
 were no model credentials. Four things came out of it that change how the
 operator should plan the run.
 
-**Anchor yield is low, and varies 4x by repository.** 135 merged PRs scanned
-produced **24 anchors** — 0.18 per PR.
+**The anchor set on disk is a demonstration-scale sample, not the run.** 45 PRs
+per repository, against the ~570 per repository the real run needs (below).
+Check `run_complete` in `mining/MINING.json` before trusting any count in it.
+
+**A pattern was matching forward-looking text, and it was over half the yield.**
+The bare `we always` / `we never` alternatives in the `convention` pattern
+matched review *requests* ("assert that we never see an event older than the
+checkpoint") — proposals about future code, not references to established
+practice. Tightened to the present perfect.
+
+The correction removed **13 of the 24 anchors mined, 54%** — including 11 of
+CockroachDB's 15. Before the fix CockroachDB looked like a 4x richer source than
+the other two repositories; afterwards all three sit within 25% of each other.
+Had that gone unnoticed, the mining effort would have been weighted toward a
+repository on the strength of a broken regex.
+
+The change, its reason, and its effect are recorded in `ANCHOR_PATTERNS` /
+`PATTERN_REVISIONS` in `harness/mine.py` and published in `mining/MINING.json`.
+It was made before any task existed and before any result; the freeze that
+matters is still ahead. `mine.refilter()` re-applied the corrected patterns to
+the anchors already on disk, so code and artefacts agree without re-spending
+the API budget; its report is `mining/REFILTER.json`.
+
+**Anchor yield is low, and fairly uniform once the false positives are gone.**
+135 merged PRs scanned produced **11 anchors** — 0.081 per PR.
 
 | Repository | PRs scanned | Anchors | Yield |
 |---|---:|---:|---:|
-| `cockroachdb/cockroach` | 45 | 15 | 0.33 |
-| `open-telemetry/opentelemetry-collector` | 45 | 5 | 0.11 |
-| `backstage/backstage` | 45 | 4 | 0.09 |
+| `cockroachdb/cockroach` | 45 | 4 | 0.089 |
+| `open-telemetry/opentelemetry-collector` | 45 | 4 | 0.089 |
+| `backstage/backstage` | 45 | 3 | 0.067 |
 
 The 72-task set needs roughly 300 anchors once drafter rejections and the A0
-filter have taken their share, so plan on mining **~1,700 PRs**. At the observed
-~2.5 PRs/minute the miner is the long pole: budget **8–12 hours** of wall clock,
-and weight the mix toward repositories like CockroachDB whose review culture
-states decisions explicitly. This number belongs in the plan, not in a surprise
-halfway through drafting.
-
-**A pattern was matching forward-looking text.** The bare `we always` /
-`we never` alternatives in the `convention` pattern matched review *requests*
-("assert that we never see an event older than the checkpoint") — proposals
-about future code, not references to established practice. Tightened to the
-present perfect. The change, its reason, and its effect are recorded in
-`ANCHOR_PATTERNS` / `PATTERN_REVISIONS` in `harness/mine.py` and published in
-`mining/MINING.json`. It was made before any task existed and before any
-result; the freeze that matters is still ahead.
+filter have taken their share, so plan on mining **~3,700 PRs**. At the observed
+~2.5 PRs/minute the miner is by far the long pole: budget **20–25 hours** of
+wall clock, or parallelise across repositories. This number belongs in the plan,
+not in a surprise halfway through drafting. It is also the strongest argument
+for adding repositories rather than mining the same three harder.
 
 **`gh api` silently switched to POST.** Passing `-f ref=<sha>` without
 `-X GET` turns the request into a POST, and the contents endpoint then fails in

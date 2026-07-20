@@ -22,7 +22,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .util import V0_ROOT, HarnessError, sha256_text, utcnow, write_json, write_jsonl
+from .util import (V0_ROOT, HarnessError, read_jsonl, sha256_text, utcnow,
+                   write_json, write_jsonl)
 
 # ---------------------------------------------------------------------------
 # §4 step 2: backward-reference patterns.
@@ -66,9 +67,10 @@ PATTERN_REVISIONS = [
             "pattern was for."
         ),
         "effect_on_existing_anchors": (
-            "Anchors mined before this change are unaffected on disk. Re-run "
-            "`mine` to apply it; several cockroachdb anchors matched only on this "
-            "alternative and will drop out."
+            "Measured: 13 of the 24 anchors already mined (54%) matched only on "
+            "this alternative and were dropped, including 11 of CockroachDB's 15. "
+            "Applied to anchors already on disk with `refilter()` rather than by "
+            "re-mining; see mining/REFILTER.json."
         ),
     },
 ]
@@ -165,15 +167,31 @@ REPOS: list[RepoSpec] = [
 # ---------------------------------------------------------------------------
 
 
-def _gh(args: list[str], *, retries: int = 3) -> object:
-    """Run `gh api ...` and return parsed JSON."""
+GH_TIMEOUT_S = 120
+
+
+def _gh(args: list[str], *, retries: int = 3, timeout: int = GH_TIMEOUT_S) -> object:
+    """Run `gh api ...` and return parsed JSON.
+
+    The timeout is load-bearing. A `--paginate` call against a pull request with
+    a very large comment thread can stall indefinitely, and the mining run is
+    hours long and unattended — one hung call would otherwise stop the whole
+    run with no error and no output. A timed-out call is retried, then given up
+    on, so one pathological thread costs one PR rather than the run.
+    """
     last: Exception | None = None
     for attempt in range(retries):
-        proc = subprocess.run(
-            ["gh", "api", *args],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                ["gh", "api", *args],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            last = HarnessError(f"gh api {' '.join(args)} timed out after {timeout}s")
+            print(f"    .. timeout ({timeout}s), attempt {attempt + 1}/{retries}")
+            continue
         if proc.returncode == 0:
             try:
                 return json.loads(proc.stdout or "null")
@@ -439,6 +457,70 @@ def _manifest(specs, per_repo_stats, all_anchors, out_path, prs_per_repo, *, com
             "including the known bias risk of each choice."
         ),
     }
+
+
+def refilter(*, path: Path = ANCHORS_PATH) -> dict:
+    """Re-apply the current patterns to an already-mined anchor set.
+
+    Why this exists: `ANCHOR_PATTERNS` was corrected after a mining run (see
+    `PATTERN_REVISIONS`), which left anchors on disk that the current rules
+    would not have selected. Re-mining is hours of API time; re-filtering the
+    stored text is seconds and is deterministic. Anchors that no longer match
+    any pattern are dropped, and every surviving anchor's `matched_patterns` is
+    recomputed.
+
+    Limitation, stated because it is real: the miner matched against the full
+    comment body, while this matches against `text`, which was truncated to
+    MAX_ANCHOR_CHARS on the way to disk. An anchor whose only match lay beyond
+    that cut will be dropped here even though the miner would have kept it.
+    Anchors are recorded with their length, so the affected count is reported.
+    """
+    rows = read_jsonl(path)
+    if not rows:
+        raise HarnessError(f"no anchors at {path}")
+
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    changed = 0
+    at_truncation_limit = 0
+    for a in rows:
+        before = a.get("matched_patterns", [])
+        after = match_patterns(a["text"])
+        if len(a["text"]) >= MAX_ANCHOR_CHARS:
+            at_truncation_limit += 1
+        if not after:
+            dropped.append({"anchor_id": a["anchor_id"], "repo": a["repo"], "was": before})
+            continue
+        if after != before:
+            changed += 1
+        kept.append({**a, "matched_patterns": after, "refiltered": True})
+
+    write_jsonl(path, kept)
+
+    report = {
+        "refiltered_at": utcnow(),
+        "method": "re-applied current ANCHOR_PATTERNS to stored anchor text; no new API calls",
+        "anchors_in": len(rows),
+        "anchors_kept": len(kept),
+        "anchors_dropped": len(dropped),
+        "patterns_changed_on_kept": changed,
+        "dropped_detail": dropped,
+        "anchors_at_truncation_limit": at_truncation_limit,
+        "limitation": (
+            "Matching is against the stored (truncated) text, not the original "
+            "comment body. An anchor whose only match lay past MAX_ANCHOR_CHARS "
+            f"is dropped here though the miner would have kept it; "
+            f"{at_truncation_limit} anchors are at the truncation limit and could "
+            f"be affected."
+        ),
+        "by_repo_kept": _count(kept, "repo") if kept else {},
+    }
+    write_json(V0_ROOT / "mining" / "REFILTER.json", report)
+    print(
+        f"[refilter] {len(rows)} -> {len(kept)} anchors "
+        f"({len(dropped)} dropped, {changed} reclassified)"
+    )
+    return report
 
 
 def _count(rows: list[dict], key: str) -> dict[str, int]:
