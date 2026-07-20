@@ -104,11 +104,10 @@ excluded from the timings. Peak RSS from `/usr/bin/time -l`.
 ### Measurement conditions
 
 **Read this before trusting any latency figure here.** The first pass of this
-spike ran benchmarks while other jobs were on the
-machine, and several published numbers were wrong because of it.** They have
-been re-measured; the corrections are recorded inline rather than silently
-patched. The rule that emerged, stated plainly because it invalidated a
-headline finding:
+spike ran benchmarks while other jobs were on the machine, and several
+published numbers were wrong because of it. They have been re-measured; the
+corrections are recorded inline rather than silently patched. The rule that
+emerged, stated plainly because it invalidated a headline finding:
 
 > **A latency ratio is only trustworthy when both sides were measured
 > back-to-back in the same command, on an otherwise idle machine.**
@@ -711,7 +710,7 @@ truncated-download incident below and not re-run once its 3493.30 ms/pair in
 pure Go had excluded it. Its NDCG is **UNVERIFIED**.
 
 **`mxbai-rerank-xsmall-v1` makes ranking worse than not reranking at all.** It
-is 1.9x the parameters of `jina-reranker-v1-turbo-en`, 2.1x the pure-Go
+is 1.9x the parameters of `jina-reranker-v1-turbo-en`, 2.5x the pure-Go
 latency, needs 39 ONNX op types instead of 27, and it costs 0.025 NDCG@10. This
 is not a hypothetical failure mode; it is a published, actively downloaded
 reranker. Do not use it. More generally: model size does not predict rerank
@@ -1003,7 +1002,7 @@ the corpus needs re-embedding.
 Four findings that must not be lost:
 
 1. **A reranker can make ranking worse.** `mxbai-rerank-xsmall-v1` scored
-   **−0.0246 NDCG@10** against no reranking, while being 1.9x larger and 2.1x
+   **−0.0246 NDCG@10** against no reranking, while being 1.9x larger and 2.5x
    slower than `jina-reranker-v1-turbo-en`, which scored +0.0356. Any reranker
    adopted into CRED must beat the vector-only baseline on a labelled set
    before it ships.

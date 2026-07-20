@@ -696,7 +696,7 @@ open design question, not a settled one.
 
 A reranker must beat the vector-only baseline on a labelled set before shipping.
 This is not a formality: `mxbai-rerank-xsmall-v1` scored **−0.0246 NDCG@10**,
-actively worse than no reranking, while being 1.9x larger and 2.1x slower than
+actively worse than no reranking, while being 1.9x larger and 2.5x slower than
 the model that scored +0.0356.
 
 ### Correction, 2026-07-20
