@@ -815,3 +815,172 @@ mode already caught by an existing control.
 This weakens the pain the product is built around, and it was volunteered
 rather than probed for. It is now the second thing interviews 002+ must test,
 after the fragmentation observation.
+
+---
+
+## D-012 — Success is parity with Mem0 plus a working team layer
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Amends:** D-004, D-005, and the kill criteria in the PRD
+
+### Decision
+
+CRED is **not** a venture-scale bet and stops being evaluated as one.
+
+Success is defined as: **do what Mem0 does, at comparable quality, and cover
+teams and organizations well enough to be worth adopting.** A good open-source
+project with real users clears the bar. It does not need to establish a new
+category, and it does not need to prove the category is large.
+
+### Reasoning
+
+Every kill criterion recorded so far assumed venture stakes — that the project
+must be stopped unless the market is demonstrably big. That framing produced
+disproportionate machinery: pre-registered numeric kill thresholds, a κ ≥ 0.70
+judge gate, blind external audit, and an experiment whose stated purpose was
+to decide whether to abandon the project.
+
+Under this decision, the existence question is already answered. Mem0, Zep,
+and Letta have users. People install and run memory systems. CRED does not
+have to prove that; it has to be good and to cover the team case those
+products cover poorly.
+
+### What this changes
+
+- **v0 stops being a kill criterion and becomes a design check.** It answers
+  "is retrieval pulling its weight, and where," not "should this project
+  exist." The harness stays; the pre-registered abandon-threshold does not
+  apply.
+- **The demand test stops being existential validation** and becomes ordinary
+  user research: what teams actually need, not whether anyone needs anything.
+- **The evidence bar drops for existence questions and stays high for design
+  questions.** Whether the category is real is settled by competitors having
+  users. Whether a specific mechanism works is still measured.
+
+### What this does not erase
+
+Recorded because a lowered bar is a legitimate scope decision and an
+illegitimate reason to discard evidence:
+
+1. **D-011 stands.** Sovereignty is a tiebreaker, not a wedge. Lowering
+   ambition does not restore a differentiator the evidence removed.
+2. **The 10:1 seller-to-buyer observation in D-007 stands.** It is no longer
+   existential, but it still predicts that distribution will be harder than
+   the discourse suggests.
+3. **The long-context question stands as a design question.** If retrieval
+   does not beat a long window on a task, the honest response is to not
+   retrieve for that task — not to ship retrieval anyway.
+
+### What this rules out
+
+- Framing any future decision as "kill the project" on market-size grounds.
+- Research whose only purpose is to justify the project's existence.
+- Methodology calibrated for external peer review rather than for making a
+  build decision.
+
+### What this forces
+
+The competitive question becomes concrete and answerable: **what does Mem0 do
+well, and what does it not do for teams?** That is a product question with a
+findable answer, not a market question requiring a survey. It is the subject
+of [why-survivors-survive.md](evidence/why-survivors-survive.md).
+
+---
+
+## D-013 — Distribution is integration, and pricing is metered
+
+- **Date:** 2026-07-20
+- **Status:** Decided
+- **Amends:** D-006 (makes its "distribution is the edge" concrete), corrects
+  the seat-price operating parameter in D-007
+- **Evidence:** [why-survivors-survive.md](evidence/why-survivors-survive.md)
+
+### Decision
+
+**Distribution means getting vendored inside someone else's repository**, not
+launching. The channel is first-party integration packages in agent
+frameworks, and it is free, solo-reproducible, and captures the decision
+before a user frames it as a decision.
+
+**Pricing is metered, never per seat.** No company in this category sells
+seats.
+
+### The distribution evidence
+
+`run-llama/llama_index` ships `llama-index-memory-mem0` as a **first-party
+package inside its own monorepo**. `strands-agents/tools` ships
+`mem0_memory.py`. `crewAIInc/crewAI` has **71 code hits for `mem0`** against
+Zep's 9, and **zero** for Letta and Cognee.
+
+This is the Context7 mechanic pushed one layer deeper. Two independent scans
+have now converged on the same answer, which is the strongest methodological
+signal in the research so far.
+
+### The pricing correction
+
+Five pricing pages, five metered models: Mem0 by request, Zep by ingest
+credit, Cognee by token ($2.50/1M), Supermemory by credit-wrapped usage, and
+Letta by **$0.10 per active agent per month**. Zep and Cognee charge **zero
+for reads, storage, and users**.
+
+D-007 recorded a **$20–40 per seat per month** anchor. That is wrong on the
+**unit**, not merely the amount. Letta's per-agent meter is the tell: when one
+developer runs many agents, a seat is the wrong denominator by construction.
+
+### The parity gap is three engineers
+
+Mem0 was **four people** at its $24M Series A. Zep says five. Under D-012,
+where success is parity plus a working team layer, this is the single most
+actionable number in the research: the gap is small enough to be real.
+
+### FALSIFIED
+
+Mem0 is **not** AWS's exclusive memory provider. `strands-agents/tools` ships
+five memory tools including AWS's own `agent_core_memory` (Bedrock AgentCore
+Memory). The partner became the competitor in the same namespace, and Mem0
+retained the exclusivity language in fundraising materials. A concrete
+instance of D-004 risk #2 — platforms price the primitive at zero.
+
+### The correction to this project's own method
+
+**Every demand and graveyard finding in this repository is HN-derived, and HN
+is one channel that demonstrably misses companies.** Supermemory reached #1 on
+Product Hunt with 705 upvotes while its **peak HN score was 5**, and it has
+28.5k stars and 278k npm downloads per month. Cognee's all-time HN peak is 9.
+
+The graveyard table in `market-landscape.md` was already annotated as a
+falsified inference for MCP servers. This widens the problem: the sampling
+frame itself was narrow, and Product Hunt was never examined.
+
+### Evidence *for* the thesis, found in a competitor's launch thread
+
+The top two comments on Mem0's 201-point Show HN were **staleness and
+privacy** — the exact governance questions Mem0 still has not answered two
+years later. Zep has meanwhile repositioned onto the word "governed," with SOC
+2 Type II in hand.
+
+This partly offsets D-009's disconfirming note that Context7's users did not
+care about closed, popularity-shaped trust signals.
+
+### Open tension — the most serious finding in this scan
+
+**Three funded companies retreated from the governed-team version of this
+product within twelve months.** Mem0 v2.0.0 (2026-04-14) **removed**
+`org_id`/`project_id` from the client SDK entirely. Letta tore out its memory
+server, and its PyPI downloads fell **203k → 90k in one month**. Zep killed
+self-hosting.
+
+This cuts both ways and must not be read as only one:
+
+- It is **the gap CRED targets**, now confirmed vacant by three withdrawals
+  rather than by absence of attempts.
+- It is also **evidence that the gap is hard or unwanted**, told by three
+  teams who tried it with funding and money to survive being wrong.
+
+D-003 already recorded the likely mechanism: governance adds friction exactly
+when an individual user wants speed. These three retreats are that mechanism
+observed at scale, in the market, with real consequences.
+
+**This is the assumption to test first under D-012** — not whether teams want
+shared memory, but why every funded attempt to give it to them was pulled back.
