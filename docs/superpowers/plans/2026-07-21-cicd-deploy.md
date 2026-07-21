@@ -580,7 +580,7 @@ git commit -m "infra: security groups for the cred EC2 instance and RDS"
 
 ---
 
-### Task 4: ECR repository
+### Task 4: ECR repository — DONE
 
 **Files:**
 - Create: `infra/terraform/ecr.tf`
@@ -592,7 +592,7 @@ git commit -m "infra: security groups for the cred EC2 instance and RDS"
   `ecr_repository_url` output — consumed by Task 7 Step 5 (migration
   verification) and set as a GitHub repository variable in Task 11.
 
-- [ ] **Step 1: Write `ecr.tf`**
+- [x] **Step 1: Write `ecr.tf`**
 
 ```hcl
 # infra/terraform/ecr.tf
@@ -646,7 +646,7 @@ counts the single `latest` tag and never expires old SHA-tagged images —
 storage would grow unbounded despite the rule appearing to cap it. `"any"`
 counts every image regardless of tag.
 
-- [ ] **Step 2: Add the output (in this task, not deferred to Task 8 — Task
+- [x] **Step 2: Add the output (in this task, not deferred to Task 8 — Task
   7's migration-verification step needs it, and there's no reason to make it
   wait)**
 
@@ -657,7 +657,7 @@ output "ecr_repository_url" {
 }
 ```
 
-- [ ] **Step 3: Plan and apply**
+- [x] **Step 3: Plan and apply**
 
 ```bash
 cd infra/terraform
@@ -668,7 +668,7 @@ TF_VAR_db_master_password=placeholder terraform apply
 Expected: `Plan: 2 to add, 0 to change, 0 to destroy.` (outputs aren't
 resources, so the count doesn't change) then apply succeeds.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 cd infra/terraform
@@ -687,7 +687,7 @@ aws ecr get-lifecycle-policy --region ap-southeast-1 \
 
 Expected: the JSON policy with both rules.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra/terraform/ecr.tf
@@ -696,7 +696,7 @@ git commit -m "infra: ECR repository for the cred image, with a lifecycle policy
 
 ---
 
-### Task 5: EC2 instance role
+### Task 5: EC2 instance role — DONE
 
 **Files:**
 - Create: `infra/terraform/iam.tf` (EC2-facing portion only — the GitHub OIDC
@@ -708,7 +708,7 @@ git commit -m "infra: ECR repository for the cred image, with a lifecycle policy
 - Produces: `aws_iam_instance_profile.cred_ec2` — consumed by Task 6 (EC2
   instance).
 
-- [ ] **Step 1: Write the EC2 role/profile portion of `iam.tf`**
+- [x] **Step 1: Write the EC2 role/profile portion of `iam.tf`**
 
 ```hcl
 # infra/terraform/iam.tf
@@ -766,7 +766,7 @@ resource "aws_iam_instance_profile" "cred_ec2" {
 }
 ```
 
-- [ ] **Step 2: Plan and apply**
+- [x] **Step 2: Plan and apply**
 
 ```bash
 cd infra/terraform
@@ -776,7 +776,7 @@ TF_VAR_db_master_password=placeholder terraform apply
 
 Expected: `Plan: 4 to add, 0 to change, 0 to destroy.` then apply succeeds.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 aws iam get-role --profile canhta --role-name cred-ec2-instance-role \
@@ -788,7 +788,7 @@ aws iam list-attached-role-policies --profile canhta \
 Expected: an `arn:aws:iam::931628308308:role/cred-ec2-instance-role` ARN,
 then `AmazonSSMManagedInstanceCore`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add infra/terraform/iam.tf
