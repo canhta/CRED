@@ -11,9 +11,8 @@ data "aws_subnets" "default" {
   }
 }
 
-# Verified via `aws iam get-open-id-connect-provider`: this provider already
-# exists in the account (created for an unrelated project). AWS allows only
-# one provider per URL per account, so it is looked up here, never created.
+# Looked up, not created: this account already has one, and AWS allows only
+# one per URL per account.
 data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }

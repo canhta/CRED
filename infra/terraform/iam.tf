@@ -1,5 +1,3 @@
-# EC2 instance role: SSM Session Manager (so the instance never needs SSH)
-# plus read-only ECR pull scoped to this one repository.
 resource "aws_iam_role" "cred_ec2" {
   name = "cred-ec2-instance-role"
 

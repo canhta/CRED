@@ -31,27 +31,5 @@ resource "aws_security_group" "ec2" {
   }
 }
 
-resource "aws_security_group" "rds" {
-  name        = "cred-rds-sg"
-  description = "Postgres access from the cred EC2 instance only."
-  vpc_id      = data.aws_vpc.default.id
-
-  ingress {
-    description     = "Postgres from the cred app instance"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "cred-rds-sg"
-  }
-}
+# No aws_security_group.rds: Postgres now runs self-hosted in the same
+# docker-compose stack as the app, over the compose network only — no RDS.

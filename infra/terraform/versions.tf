@@ -8,21 +8,13 @@ terraform {
     }
   }
 
-  # Partial backend config on purpose: bucket/key/region/table are
-  # account-specific and a backend block cannot use variables, so they're
-  # supplied at `terraform init` time via -backend-config, keeping this file
-  # identical across every fork/account.
-  #
-  # backend.hcl's dynamodb_table locks via a DynamoDB table (Task 1's
-  # bootstrap already provisions one). Terraform >= 1.10 offers S3-native
-  # locking (`use_lockfile = true`) as the non-deprecated replacement; not
-  # switched yet since the DynamoDB table is already live and working.
+  # Partial on purpose: a backend block can't use variables, so
+  # bucket/key/region/table come from -backend-config at init time instead —
+  # keeps this file identical across every fork/account.
   backend "s3" {}
 }
 
 provider "aws" {
   region = var.aws_region
-  # No hardcoded profile — see Global Constraints in the implementation plan
-  # for this operator's own auth workaround, which lives in shell commands,
-  # never in this file.
+  # No profile: auth comes from whatever the shell has active.
 }
