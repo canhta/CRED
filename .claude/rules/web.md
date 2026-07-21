@@ -38,29 +38,47 @@ Content-hashed assets are served `Cache-Control: public, max-age=31536000,
 immutable`; `index.html` is served `no-cache`. Serving a stale bundle after a
 deploy is the failure this prevents.
 
-## 3. The type contract is generated, never hand-written
+## 3. Types are generated from the Go structs; routes are centralized
 
-The Go API is defined with Huma (on the `humago` stdlib adapter). Huma emits the
-OpenAPI spec at `/openapi.json`; hey-api generates the TypeScript client into
-`web/src/client/` from that spec. **Never hand-write a request type, a URL
-string, or a fetch call that duplicates what the generated client provides.** A
-shape drift is meant to fail `tsc`, not surface as a runtime 400. Regenerate the
-client with `task gen` after changing a Go handler's request or response struct;
-the generated directory is committed so a fresh clone type-checks.
+The Go API is plain **Gin** handlers with typed request/response structs. There is
+no OpenAPI spec — the console is the only consumer, so a spec + generated client
+is machinery it does not earn. **tygo** generates the TypeScript types from those
+Go structs into `web/src/api/types.ts`. **Never hand-write a TS type that mirrors
+a Go struct** — regenerate with `task gen:types` after changing a request or
+response struct; the generated file is committed so a fresh clone type-checks.
+
+Routes and fetch calls are hand-written but **centralized in `web/src/api/`** —
+one module of typed endpoint functions over a single route-constant table, so a
+URL lives in exactly one place. The accepted cost: a mistyped route is a runtime
+404, not a `tsc` error; centralizing the endpoints is what keeps that cost small.
+If CRED later exposes a documented external HTTP API, revisit OpenAPI then — not
+for the console.
 
 ## 4. The stack, and what not to add
 
+- UI: **Astryx** (`@astryxdesign/core` + `@astryxdesign/theme-neutral`),
+  React 19. Path A — no StyleX build: import `core/reset.css`, `core/astryx.css`,
+  `theme-neutral/theme.css` once at the entry and wrap the app in the theme
+  provider. No `<div>` for layout — compose `AppShell`, `SideNav`, `Layout`,
+  `Stack`; dense data is `Table`/`List`. Style through component props first,
+  then tokens (`var(--color-*)`, `var(--spacing-*)`, `var(--radius-*)`) — never
+  raw hex or px, never a utility class or hand-rolled `.css`. Discover components
+  with `npx astryx component <Name>` / `search` before writing UI; do not guess a
+  prop exists. Read `web/.claude/CLAUDE.md` (Astryx's own agent guide) too.
 - Routing: TanStack Router (typed routes and search params).
 - Server state: TanStack Query. Component state stays local; reach for a global
   store only when two distant components share mutable state, and say why.
-- Tables: TanStack Table.
-- Components: shadcn/ui + Tailwind — the components are copied into
-  `web/src/components/ui/` and owned here, not imported from a kit.
-- Tests: Vitest + @testing-library/react on jsdom.
+- Tables: Astryx `Table` (it ships sort/filter/pagination/selection hooks) — do
+  not add TanStack Table.
+- Charts: Astryx's own `@astryxdesign/charts`, used directly to keep a single
+  design system and token set. It is canary — do not pin, and if it proves
+  unusable the fallback is Recharts themed from `useTheme` tokens.
+- Tests: Vitest + @testing-library/react (>=16, for React 19) on jsdom.
 
-Adding a dependency is a decision with a cost (a maintained surface, a CVE
-stream). Prefer the platform and the stack above; a new library needs a reason
-a reviewer would accept.
+Dependencies track latest (no pinned versions); `npx astryx upgrade` is the
+ritual after an `@astryxdesign/*` bump. Adding a *new* library is still a
+decision with a cost — prefer Astryx and the stack above; a new one needs a
+reason a reviewer would accept.
 
 ## 5. Auth is a seam from the first commit
 

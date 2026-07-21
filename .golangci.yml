@@ -125,6 +125,10 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+    paths:
+      # A JS dependency of the console bundles its own Go implementation; it is
+      # never part of our binary and must not be linted as our code.
+      - "web/node_modules"
     rules:
       - path: '_test\.go'
         linters:

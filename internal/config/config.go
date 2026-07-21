@@ -70,6 +70,14 @@ type Config struct {
 	// https://api.openai.com/v1, http://localhost:11434/v1.
 	LLMBaseURL string
 
+	// WebAddr is the listen address for the `cred web` console server.
+	WebAddr string
+
+	// WebToken optionally gates the console: when set, every API request must
+	// carry a matching bearer token. Empty leaves the console open, honest for a
+	// self-hosted box on a trusted network and explicitly not authentication.
+	WebToken string
+
 	// Limits is the usage-and-limits policy. It ships with working
 	// defaults (limit.Defaults), so the four controls are on out of the box with
 	// no configuration — a limit that has to be configured to exist is off on
@@ -94,6 +102,8 @@ func Load() (Config, error) {
 		LLMAPIKey:  env("CRED_LLM_API_KEY", ""),
 		LLMModel:   env("CRED_LLM_MODEL", ""),
 		LLMBaseURL: env("CRED_LLM_BASE_URL", ""),
+		WebAddr:    env("CRED_WEB_ADDR", ":8080"),
+		WebToken:   env("CRED_WEB_TOKEN", ""),
 	}
 
 	if v, ok := os.LookupEnv("CRED_ALLOW_MODEL_DOWNLOAD"); ok {

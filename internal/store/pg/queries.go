@@ -392,6 +392,87 @@ func (s *Store) loadACLs(ctx context.Context, query string, ids []string) (map[s
 	return out, translate(rows.Err())
 }
 
+// ClaimStatus selects claims by liveness for a listing.
+type ClaimStatus string
+
+const (
+	// ClaimLive is a claim still current in transaction time whose valid
+	// interval has not elapsed.
+	ClaimLive ClaimStatus = "live"
+	// ClaimExpired is a claim superseded in transaction time or past its valid
+	// interval.
+	ClaimExpired ClaimStatus = "expired"
+	// ClaimAny places no liveness predicate on the listing.
+	ClaimAny ClaimStatus = "all"
+)
+
+// ClaimQuery narrows a claims listing. It names no principal: the store returns
+// rows and internal/acl decides who may read each one. A non-empty ID matches a
+// single claim regardless of status or scope, for the detail view.
+type ClaimQuery struct {
+	ID         string
+	Status     ClaimStatus
+	ScopeKind  string
+	ScopeValue string
+	Now        time.Time
+}
+
+// ListClaims returns claims matching q, newest first, without evidence and
+// without any access-control decision. It is the console's listing read model:
+// the caller loads each claim's evidence and ACLs and lets internal/acl decide
+// visibility, then paginates the authorized set. Pagination is not a SQL LIMIT
+// here because a LIMIT applied before the access-control intersection would
+// return a short page whenever some rows are denied — the silent-undercount
+// failure. Postgres filters by scope and liveness; it does not decide who sees.
+func (s *Store) ListClaims(ctx context.Context, q ClaimQuery) ([]claim.Claim, error) {
+	status := q.Status
+	if status == "" {
+		status = ClaimLive
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, kind, statement, scope_kind, scope_value,
+		       valid_from, valid_until, recorded_at, superseded_at,
+		       coalesce(superseded_by::text, ''), coalesce(supersede_reason, ''),
+		       confidence, source_repo, extracted_by_model, contributed_by
+		  FROM claims
+		 WHERE ($1 = '' OR id::text = $1)
+		   AND ($1 <> '' OR (
+		         ($3 = '' OR scope_kind = $3)
+		     AND ($4 = '' OR scope_value = $4)
+		     AND ( $2 = 'all'
+		        OR ($2 = 'live'    AND superseded_at IS NULL
+		                           AND (valid_until IS NULL OR valid_until > $5))
+		        OR ($2 = 'expired' AND (superseded_at IS NOT NULL
+		                           OR (valid_until IS NOT NULL AND valid_until <= $5))))))
+		 ORDER BY recorded_at DESC, id`,
+		q.ID, string(status), q.ScopeKind, q.ScopeValue, q.Now)
+	if err != nil {
+		return nil, translate(err)
+	}
+	defer rows.Close()
+
+	var out []claim.Claim
+	for rows.Next() {
+		var c claim.Claim
+		var validUntil, supersededAt *time.Time
+		if err := rows.Scan(&c.ID, &c.Kind, &c.Statement,
+			&c.Scope.Kind, &c.Scope.Value,
+			&c.Valid.From, &validUntil, &c.Recorded.From, &supersededAt,
+			&c.SupersededBy, &c.SupersedeReason,
+			&c.Confidence, &c.SourceRepo, &c.ExtractedByModel, &c.ContributedBy); err != nil {
+			return nil, translate(err)
+		}
+		if validUntil != nil {
+			c.Valid.Until = *validUntil
+		}
+		if supersededAt != nil {
+			c.Recorded.Until = *supersededAt
+		}
+		out = append(out, c)
+	}
+	return out, translate(rows.Err())
+}
+
 // Counts reports how many live claims and evidence rows exist, for `cred
 // doctor` and the first-run log.
 func (s *Store) Counts(ctx context.Context) (claims, evidence int, err error) {

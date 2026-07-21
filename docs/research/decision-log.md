@@ -1599,3 +1599,83 @@ This enlarges CRED beyond "parity with mem0 plus a team layer." The engine
 thesis (a claim lives only while its evidence does) is unchanged; the console is
 new surface area, sequenced behind a foundation so it does not destabilize the
 verified core.
+
+## D-022 — Layout stays Go-first; one binary; Astryx is the UI
+
+- **Date:** 2026-07-21
+- **Status:** Decided (refines D-021 after considering an apps/ monorepo)
+- **Evidence:** [portal-monorepo-stack.md](portal-monorepo-stack.md), [astryx-ui.md](astryx-ui.md); real Go tools (Vault, CockroachDB, Gitea) that ship one binary with a `server` subcommand.
+
+### Layout: Go at the root, `web/` beside it — an `apps/` split was considered and dropped
+
+An `apps/server` + `apps/web` symmetry was weighed and rejected. All ten surveyed
+Go+UI projects keep the Go module at the repo root with the frontend in one
+directory; moving Go under `apps/` is aesthetics, and it has a real cost —
+`go:embed` cannot cross `..`, so an `apps/server` embed would need `web/dist`
+copied into it before every tagged build. At the root, the embed file reaches
+`web/dist` directly. So: **Go module at repo root, SPA in `web/`**, a thin
+`Taskfile.yml` orchestrates both, no JS monorepo tool.
+
+### One binary, subcommands — CLI, MCP, and web are not split
+
+`cred` stays a single binary. The MCP server (`cred serve`), the web console
+(`cred web`), and the curate worker (`cred curate`) are subcommands, not separate
+binaries or modules. Splitting them into their own Go modules would force the
+engine packages out of `internal/` into a shared public module plus a `go.work`,
+and would break the one property the project sells — one static binary plus
+Postgres, self-hostable. Vault (`vault server`), CockroachDB (`cockroach
+start`), and Gitea (`gitea web`) all ship one binary; CRED follows them. If a
+light-client/heavy-server split is ever needed, it is multiple `cmd/`
+entrypoints in the *same* module, not separate modules — not now.
+
+### UI is Astryx, not shadcn
+
+The UI layer is **Astryx** (Meta, `@astryxdesign/core` + `@astryxdesign/theme-neutral`,
+React 19), replacing the shadcn/ui + Tailwind of D-021. Path A: import Astryx's
+pre-compiled CSS and use its components + tokens — **no StyleX build step**, so
+`vite build` still emits ordinary static assets and the `go:embed` path is
+untouched. Astryx's `Table` (with sort/filter/pagination hooks) replaces TanStack
+Table; TanStack Query and Router stay. Charts use Astryx's own (canary)
+`@astryxdesign/charts` directly, to keep one design system and token set; Recharts
+is the fallback only if the canary package proves unusable.
+
+Astryx is ~4 weeks old (v0.1.x, weekly releases). The operator chose latest,
+unpinned versions over the research's pin-for-stability lean — accepted because
+our source touches only React components and token overrides, so a revert to
+shadcn would be a UI-layer swap, not an architecture change. `npx astryx upgrade`
+is the ritual for the 0.1.x churn.
+
+## D-023 — The console API is Gin + tygo, not OpenAPI
+
+- **Date:** 2026-07-21
+- **Status:** Decided (reverses the Huma/OpenAPI choice in D-021)
+- **Evidence:** operator decision after weighing whether OpenAPI generation is needed for a console whose only client is our own SPA.
+
+### Decision
+
+The web API is plain **Gin** handlers with typed request/response structs. **No
+OpenAPI, no Huma.** TypeScript types are generated from the Go structs with
+**tygo** into `web/src/api/types.ts`; routes and fetch calls are hand-written and
+centralized in one `web/src/api/` module over a single route-constant table.
+
+### Why the reversal
+
+D-021 chose Huma → OpenAPI → a generated typed client. That buys three things —
+a client that type-checks *routes* as well as shapes, free request validation,
+and a Swagger spec third parties can consume. All three are **integration-surface
+value**, and this API's only consumer is our own React console. Paying a
+framework plus a codegen pipeline for value we do not use is the ceremony this
+project avoids. tygo gives the one thing we actually want here — shape safety
+across the Go/TS boundary — with a single tool and no framework.
+
+Gin is the router by operator preference: the largest Go web ecosystem and the
+familiar choice, where stdlib `net/http` would also have sufficed.
+
+### Cost, named
+
+A mistyped route is a runtime 404, not a compile error — the one safety OpenAPI
+would have added. Mitigated by centralizing every endpoint as a typed function
+over a route-constant table, so a URL exists in exactly one place. If a
+documented external API ever materializes (D-013's integration/metered
+distribution), OpenAPI earns its keep then and can be added over the Gin handlers
+without reworking the console.

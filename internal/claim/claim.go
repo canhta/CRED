@@ -150,12 +150,21 @@ type Claim struct {
 
 	SupersededBy string
 
+	// SupersedeReason records why a claim was closed: a duplicate, a
+	// contradiction, a human forget, a stale anchor, or a prune. Empty on a live
+	// claim and on one that expired only because its valid interval elapsed.
+	SupersedeReason string
+
 	// Confidence is an explainable additive score, never an opaque posterior.
 	Confidence float64
 
 	SourceRepo       string
 	ExtractedByModel string
 	PromptVersion    string
+
+	// ContributedBy is the principal a write is counted against. Empty on seeded
+	// claims, which are exempt from the contribution quota by construction.
+	ContributedBy PrincipalID
 
 	ACL ACL
 

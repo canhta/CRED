@@ -53,6 +53,11 @@ evidence does.
   research for the web portal: the Go HTTP/API layer, the Go↔TypeScript typed
   contract, the React stack, and the templ+htmx alternative, with decision
   forks.
+- [Astryx UI layer](research/astryx-ui.md) — Meta's Astryx design system as the
+  console UI: the two Vite/StyleX setups (pre-built CSS vs source compilation),
+  component inventory vs console needs (the Table covers data grids; charts are
+  the gap), theming/dark mode, Vitest notes, CLI/MCP, and a scoped go/no-go with
+  a shadcn fallback.
 
 ## Evidence
 

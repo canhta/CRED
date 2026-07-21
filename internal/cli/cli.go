@@ -41,6 +41,7 @@ Commands:
   forget <id>        Reverse a write by expiring its claim
   usage              Show per-principal quota state and per-scope cost
   serve              Run the MCP server over stdio (recall + remember)
+  web                Serve the web console: the JSON API and the embedded SPA
   doctor             Check the installation and name the fix for anything broken
 
 Environment:
@@ -59,6 +60,8 @@ Environment:
   CRED_COST_MAX_TOKENS         Input tokens per principal per window (default 2000000)
   CRED_RECALL_RATE             Recalls per principal per window (default 120)
   CRED_SCOPE_CLAIM_CEILING     Live claims per scope before pruning (default 5000)
+  CRED_WEB_ADDR                Listen address for cred web (default :8080)
+  CRED_WEB_TOKEN               Bearer token gating the console (default open)
 
 The usage limits ship on by default with working ceilings; a non-positive
 override disables that one control. See them with cred usage.
@@ -134,6 +137,8 @@ func dispatch(ctx context.Context, cmd string, args []string, cfg config.Config,
 		return runUsage(ctx, args, cfg, stdout)
 	case "serve":
 		return runServe(ctx, args, cfg, log, stderr)
+	case "web":
+		return runWeb(ctx, args, cfg, log, stderr)
 	case "doctor":
 		return runDoctor(ctx, args, cfg, stdout)
 	case "help", "-h", "--help":
