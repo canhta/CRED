@@ -10,6 +10,7 @@ import {
   register,
 } from './client';
 import type { ClaimsParams, RecallParams, UsageParams } from './client';
+import type { LoginRequest, RegisterRequest } from './types';
 
 export const queryKeys = {
   health: ['health'] as const,
@@ -59,11 +60,11 @@ export function useUsage(params: UsageParams = {}) {
 }
 
 export function useRegister() {
-  return useMutation({ mutationFn: register });
+  return useMutation({ mutationFn: (data: RegisterRequest) => register(data) });
 }
 
 export function useLogin() {
-  return useMutation({ mutationFn: login });
+  return useMutation({ mutationFn: (data: LoginRequest) => login(data) });
 }
 
 export function useLogout() {
