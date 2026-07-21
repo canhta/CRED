@@ -30,7 +30,7 @@ func New(st *pg.Store, emb recall.Embedder, count recall.TokenCounter,
 ) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(requestLogger(log), gin.Recovery(), authenticate(cfg))
+	r.Use(requestLogger(log), gin.Recovery(), authenticate(cfg, st))
 
 	s := &server{store: st, embedder: emb, count: count, cfg: cfg, log: log}
 	api := r.Group("/api")
@@ -40,6 +40,9 @@ func New(st *pg.Store, emb recall.Embedder, count recall.TokenCounter,
 		api.GET("/claims/:id", s.getClaim)
 		api.GET("/recall", s.recall)
 		api.GET("/usage", s.usage)
+		api.POST("/auth/register", s.register)
+		api.POST("/auth/login", s.login)
+		api.POST("/auth/logout", s.logout)
 	}
 	return r
 }
@@ -58,6 +61,11 @@ type server struct {
 // package's context values.
 type principalKey struct{}
 
+// roleKey is the context key for the resolved session's role, when a session
+// (not a header) supplied the principal. Attached now so a later route guard
+// can read it without a second query; nothing reads it yet.
+type roleKey struct{}
+
 // principalFrom returns the principal the auth middleware resolved. Handlers
 // read the caller's identity through here, never from the request header.
 func principalFrom(c *gin.Context) claim.PrincipalID {
@@ -68,10 +76,12 @@ func principalFrom(c *gin.Context) claim.PrincipalID {
 }
 
 // authenticate resolves the principal for every request and, when a token is
-// configured, gates access on it. This is the whole authentication seam:
-// replacing it with OIDC/SSO later touches no handler, because handlers read
-// the principal the middleware put on the context, not the header.
-func authenticate(cfg config.Config) gin.HandlerFunc {
+// configured, gates access on it. A session cookie is checked first and, when
+// valid, is authoritative -- its principal came from a verified login, not a
+// client-supplied header, so it is never overridden by one. Replacing this
+// with OIDC/SSO later touches no handler, because handlers read the
+// principal the middleware put on the context, not the header or the cookie.
+func authenticate(cfg config.Config, store *pg.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cfg.WebToken != "" {
 			const prefix = "Bearer "
@@ -80,6 +90,21 @@ func authenticate(cfg config.Config) gin.HandlerFunc {
 				auth[len(prefix):] != cfg.WebToken {
 				c.AbortWithStatusJSON(http.StatusUnauthorized,
 					ErrorResponse{Error: "unauthorized"})
+				return
+			}
+		}
+
+		// An invalid or expired cookie falls through to the header/config-
+		// default path below rather than failing the request outright -- a
+		// stale cookie from a rotated session must not lock out a caller
+		// that also has a valid bearer token configured.
+		if cookie, err := c.Cookie(sessionCookieName); err == nil {
+			principal, role, serr := store.SessionPrincipal(c.Request.Context(), hashToken(cookie), time.Now().UTC())
+			if serr == nil {
+				ctx := context.WithValue(c.Request.Context(), principalKey{}, principal)
+				ctx = context.WithValue(ctx, roleKey{}, role)
+				c.Request = c.Request.WithContext(ctx)
+				c.Next()
 				return
 			}
 		}
@@ -112,9 +137,15 @@ func requestLogger(log *slog.Logger) gin.HandlerFunc {
 }
 
 func (s *server) health(c *gin.Context) {
+	count, err := s.store.UserCount(c.Request.Context())
+	if err != nil {
+		s.fail(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, HealthResponse{
-		Status:    "ok",
-		Version:   mcpsrv.Version,
-		Principal: string(principalFrom(c)),
+		Status:           "ok",
+		Version:          mcpsrv.Version,
+		Principal:        string(principalFrom(c)),
+		RegistrationOpen: count == 0,
 	})
 }

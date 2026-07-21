@@ -12,9 +12,10 @@ type ErrorResponse struct {
 // HealthResponse reports liveness and the resolved caller identity, so the
 // console can show who it is acting as before any data loads.
 type HealthResponse struct {
-	Status    string `json:"status"`
-	Version   string `json:"version"`
-	Principal string `json:"principal"`
+	Status           string `json:"status"`
+	Version          string `json:"version"`
+	Principal        string `json:"principal"`
+	RegistrationOpen bool   `json:"registration_open"`
 }
 
 // Scope narrows where a claim applies.
@@ -150,4 +151,22 @@ type UsageResponse struct {
 	Denied             int           `json:"denied"`
 	CostByScope        []ScopeCost   `json:"cost_by_scope"`
 	ScopeGrowth        []ScopeGrowth `json:"scope_growth"`
+}
+
+// RegisterRequest is the body of POST /api/auth/register.
+type RegisterRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
+}
+
+// LoginRequest is the body of POST /api/auth/login.
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+}
+
+// AuthResponse is the body of a successful register or login.
+type AuthResponse struct {
+	Principal string `json:"principal"`
+	Role      string `json:"role"`
 }
