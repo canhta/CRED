@@ -60,7 +60,18 @@ const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
   beforeLoad: async () => {
-    const health = await getHealth();
+    // A thrown redirect below must propagate untouched -- TanStack Router
+    // implements the redirect itself as a thrown value, so only a genuine
+    // health-check failure (network error, 500) is caught here. Fail closed
+    // to the login screen: an unreachable backend is not evidence a session
+    // exists, and the login page can show a clear error if the backend is
+    // still down when the user submits.
+    let health;
+    try {
+      health = await getHealth();
+    } catch {
+      throw redirect({ to: '/login' });
+    }
     if (!health.principal) {
       throw redirect({ to: '/login' });
     }

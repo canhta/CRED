@@ -130,4 +130,15 @@ describe('appRoute beforeLoad guard', () => {
       await screen.findByRole('button', { name: 'Sign in' }),
     ).toBeInTheDocument();
   });
+
+  it('redirects to login when the health check itself throws, rather than surfacing an unhandled route error', async () => {
+    vi.mocked(getHealth).mockRejectedValue(new Error('network error'));
+
+    renderApp('/claims');
+
+    expect(await screen.findByText('Welcome back')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Sign in' }),
+    ).toBeInTheDocument();
+  });
 });

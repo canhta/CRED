@@ -138,6 +138,13 @@ func (s *server) register(c *gin.Context) {
 			c.JSON(http.StatusConflict, ErrorResponse{Error: "email already registered"})
 			return
 		}
+		if errors.Is(err, pg.ErrAdminExists) {
+			// Another registration won the race to be first: from this
+			// client's perspective that is indistinguishable from
+			// registration having already been closed.
+			c.JSON(http.StatusForbidden, ErrorResponse{Error: "registration is closed"})
+			return
+		}
 		s.fail(c, err)
 		return
 	}

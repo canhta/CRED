@@ -156,7 +156,7 @@ type UsageResponse struct {
 // RegisterRequest is the body of POST /api/auth/register.
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=8"`
+	Password string `json:"password" binding:"required,min=8,max=72"`
 }
 
 // LoginRequest is the body of POST /api/auth/login.

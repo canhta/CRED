@@ -43,6 +43,13 @@ var ErrExtensionMissing = errors.New("cred: the pgvector extension is not instal
 // has an account.
 var ErrEmailTaken = errors.New("cred: email already registered")
 
+// ErrAdminExists reports a registration attempt that lost the race to become
+// the first (admin) account: another registration already committed one.
+// Postgres's user_credentials_one_admin partial unique index is what makes
+// this detectable at all -- the count-then-insert check in the handler
+// cannot see a concurrent, not-yet-committed insert.
+var ErrAdminExists = errors.New("cred: an admin account already exists")
+
 // Store holds a connection pool.
 type Store struct {
 	pool *pgxpool.Pool
@@ -98,6 +105,8 @@ func translate(err error) error {
 			return ErrExtensionMissing
 		case pgErr.Code == "23505" && pgErr.ConstraintName == "user_credentials_email_key":
 			return ErrEmailTaken
+		case pgErr.Code == "23505" && pgErr.ConstraintName == "user_credentials_one_admin":
+			return ErrAdminExists
 		}
 		// Carry the constraint name, which is the part a caller can act on,
 		// and drop the driver type.

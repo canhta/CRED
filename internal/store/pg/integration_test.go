@@ -416,3 +416,128 @@ func TestRecallBudgetDeniesAndRecords(t *testing.T) {
 	require.True(t, ok, "a budget denial must be a typed BudgetError the caller can surface")
 	require.Equal(t, limit.ReasonRecallRate, be.Reason)
 }
+
+// uniqueEmail returns an email address that has never been used by another
+// test in this run. Tests in this package share one database and CI runs
+// them concurrently, so a fixed literal would collide across tests via the
+// email UNIQUE constraint.
+func uniqueEmail(t *testing.T, tag string) string {
+	t.Helper()
+	return fmt.Sprintf("%s-%d@example.test", tag, time.Now().UnixNano())
+}
+
+// uniqueTokenHash returns a value that has never been used as a
+// sessions.token_hash by another test run against this database -- the
+// column is UNIQUE, and this suite's database persists across runs (a
+// developer's own manual testing included), so a fixed literal collides.
+func uniqueTokenHash(t *testing.T, tag string) string {
+	t.Helper()
+	return fmt.Sprintf("%s-%d", tag, time.Now().UnixNano())
+}
+
+// TestCreateUserSessionPrincipalRoundTrip covers the path register() and
+// login() both depend on: a created user's principal can start a session,
+// and that session resolves back to the same principal and role.
+func TestCreateUserSessionPrincipalRoundTrip(t *testing.T) {
+	st := openTestStore(t)
+	ctx := t.Context()
+
+	principal, err := st.CreateUser(ctx, uniqueEmail(t, "roundtrip"), "hash", "member")
+	require.NoError(t, err)
+	require.NotEmpty(t, principal)
+
+	tokenHash := uniqueTokenHash(t, "roundtrip")
+	require.NoError(t, st.CreateSession(ctx, principal, tokenHash, time.Now().UTC().Add(time.Hour)))
+
+	gotPrincipal, gotRole, err := st.SessionPrincipal(ctx, tokenHash, time.Now().UTC())
+	require.NoError(t, err)
+	require.Equal(t, principal, gotPrincipal)
+	require.Equal(t, "member", gotRole)
+}
+
+// TestSessionPrincipalRejectsExpiredSession -- an expired session must be
+// indistinguishable from an absent one, the same as an authorization failure
+// and a nonexistent row are indistinguishable elsewhere in this codebase.
+func TestSessionPrincipalRejectsExpiredSession(t *testing.T) {
+	st := openTestStore(t)
+	ctx := t.Context()
+
+	principal, err := st.CreateUser(ctx, uniqueEmail(t, "expired"), "hash", "member")
+	require.NoError(t, err)
+
+	tokenHash := uniqueTokenHash(t, "expired")
+	past := time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, st.CreateSession(ctx, principal, tokenHash, past))
+
+	_, _, err = st.SessionPrincipal(ctx, tokenHash, time.Now().UTC())
+	require.ErrorIs(t, err, pg.ErrNotFound)
+}
+
+// TestFailedLoginsInWindowCountsOnlyFailuresInWindow -- the login rate limit
+// counts failures within a window; a success must never count against it, and
+// a failure outside the window must not either. now is passed explicitly to
+// RecordLoginAttempt so the window boundary is exact rather than approximated
+// with a sleep.
+func TestFailedLoginsInWindowCountsOnlyFailuresInWindow(t *testing.T) {
+	st := openTestStore(t)
+	ctx := t.Context()
+	email := uniqueEmail(t, "loginwindow")
+
+	windowStart := time.Now().UTC()
+	beforeWindow := windowStart.Add(-time.Hour)
+	insideWindow1 := windowStart.Add(time.Minute)
+	insideWindow2 := windowStart.Add(2 * time.Minute)
+
+	require.NoError(t, st.RecordLoginAttempt(ctx, email, false, beforeWindow)) // too old: excluded
+	require.NoError(t, st.RecordLoginAttempt(ctx, email, true, insideWindow1)) // succeeded: excluded
+	require.NoError(t, st.RecordLoginAttempt(ctx, email, false, insideWindow1))
+	require.NoError(t, st.RecordLoginAttempt(ctx, email, false, insideWindow2))
+
+	failed, err := st.FailedLoginsInWindow(ctx, email, windowStart)
+	require.NoError(t, err)
+	require.Equal(t, 2, failed, "only the two in-window failures should count")
+}
+
+// TestCreateUserDuplicateEmailReturnsErrEmailTaken -- the same-email race is
+// caught by user_credentials_email_key.
+func TestCreateUserDuplicateEmailReturnsErrEmailTaken(t *testing.T) {
+	st := openTestStore(t)
+	ctx := t.Context()
+	email := uniqueEmail(t, "dup")
+
+	_, err := st.CreateUser(ctx, email, "hash", "member")
+	require.NoError(t, err)
+
+	_, err = st.CreateUser(ctx, email, "hash", "member")
+	require.ErrorIs(t, err, pg.ErrEmailTaken)
+}
+
+// TestCreateUserSecondAdminReturnsErrAdminExists proves the fix for the
+// registration TOCTOU: two admin rows with different emails must never both
+// be created. user_credentials_one_admin is a partial unique index on
+// (role) WHERE role = 'admin', so the second insert is rejected by Postgres
+// itself rather than relying on the handler's non-atomic count-then-insert
+// check.
+//
+// This suite shares one database across runs (including a developer's own
+// manual testing of the register endpoint), so an admin row may already
+// exist here -- the test only creates a first admin when one is not already
+// present, then asserts the constraint rejects an additional one either way.
+func TestCreateUserSecondAdminReturnsErrAdminExists(t *testing.T) {
+	st := openTestStore(t)
+	ctx := t.Context()
+
+	var alreadyHasAdmin bool
+	err := st.Pool().QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM user_credentials WHERE role = 'admin')`,
+	).Scan(&alreadyHasAdmin)
+	require.NoError(t, err)
+
+	if !alreadyHasAdmin {
+		_, createErr := st.CreateUser(ctx, uniqueEmail(t, "admin1"), "hash", "admin")
+		require.NoError(t, createErr)
+	}
+
+	_, err = st.CreateUser(ctx, uniqueEmail(t, "admin2"), "hash", "admin")
+	require.ErrorIs(t, err, pg.ErrAdminExists)
+}

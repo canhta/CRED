@@ -66,4 +66,16 @@ describe('RegisterPage', () => {
 
     expect(await screen.findByText(/registration is closed/i)).toBeInTheDocument();
   });
+
+  it('shows a distinct error state when the health check itself fails, not "registration is closed"', async () => {
+    vi.mocked(getHealth).mockRejectedValue(new Error('network error'));
+    renderWithClient(
+      <RegisterPage onSuccess={onSuccess} onNavigateToLogin={onNavigateToLogin} />,
+    );
+
+    expect(
+      await screen.findByText(/couldn't check registration status/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/registration is closed/i)).not.toBeInTheDocument();
+  });
 });

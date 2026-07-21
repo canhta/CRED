@@ -26,6 +26,17 @@ export function RegisterPage({
     return null;
   }
 
+  if (health.isError) {
+    return (
+      <Center height="100%">
+        <EmptyState
+          title="Couldn't check registration status"
+          description="The server may be unreachable. Refresh to try again."
+        />
+      </Center>
+    );
+  }
+
   if (!health.data?.registration_open) {
     return (
       <Center height="100%">
