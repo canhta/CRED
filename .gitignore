@@ -2,15 +2,6 @@
 # Third-party papers — reference locally, do not redistribute
 docs/*.pdf
 
-# v0 experiment — materialized third-party content and generated artifacts.
-# Reproducible from v0/corpus/MANIFEST.json, which IS committed (sha256 +
-# full source inventory). The content itself belongs to its upstream repos.
-v0/corpus/S/
-v0/corpus/M/
-v0/corpus/L/
-v0/corpus/_raw/
-v0/index/
-v0/__pycache__/
 **/__pycache__/
 
 # Local secrets — API keys for live testing. NEVER committed.
@@ -19,3 +10,7 @@ v0/__pycache__/
 !.env.example
 .secrets/
 cred
+
+# superpowers subagent-driven-development execution ledger — scratch state
+# for resuming an interrupted run, not a project artifact.
+.superpowers/
