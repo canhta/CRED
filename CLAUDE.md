@@ -7,19 +7,19 @@ does.
 ## Current phase
 
 **Pre-implementation.** There is no product code in this repository and none
-should be added yet. Discovery is complete; the next deliverables are an
-experiment and two gating spikes, not features.
+should be added yet. Discovery is complete. One gating spike remains open.
 
 Before writing any implementation code, check that the gate for it has actually
 cleared:
 
 | Gate | Where it is decided | Status |
 |---|---|---|
-| Does retrieved memory beat plain long context? | `docs/research/spikes/v0-experiment-design.md` | Designed, not run |
+| Does retrieved memory beat plain long context? | `docs/research/spikes/v0-experiment-design.md` | **Dropped, unrun** — see `docs/research/decision-log.md` D-024. The harness was built through corpus assembly and deleted before any model call |
 | Does a pure-Go embedding path exist without CGO? | `docs/research/spikes/go-embeddings-tokenizer.md` | **Cleared**, with a throughput condition |
 
-If either gate fails, the correct response is to change the plan and record why
-— not to route around it.
+If a gate fails, the correct response is to change the plan and record why —
+not to route around it. The dropped gate above was not failed; it was never
+measured, and that distinction is preserved in D-024, not smoothed over here.
 
 ## Non-negotiables
 

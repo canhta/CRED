@@ -1679,3 +1679,61 @@ over a route-constant table, so a URL exists in exactly one place. If a
 documented external API ever materializes (D-013's integration/metered
 distribution), OpenAPI earns its keep then and can be added over the Gin handlers
 without reworking the console.
+
+## D-024 — The v0 memory-vs-long-context experiment is dropped, unrun
+
+- **Date:** 2026-07-21
+- **Status:** Decided
+- **Evidence:** operator instruction to remove `v0/` after confirming it had
+  produced no result. See `docs/research/spikes/v0-experiment-design.md` §13
+  for the design and the state it was left in.
+
+### Decision
+
+The `v0/` harness is deleted from the repository. The experiment it implemented
+— PRD §11/§13's gate, "does retrieved memory beat plain long context?" — is
+**not going to be run.** `v0-experiment-design.md` is marked abandoned rather
+than executed.
+
+### Reasoning
+
+The harness was built through corpus assembly (`mine`, `corpus-fetch`,
+`corpus-build`, `index` all completed against three public repositories) but
+never produced a single live model call. `draft` — the first stage needing a
+model — was blocked on Anthropic credentials, which were never supplied. The
+harness had no OpenAI-compatible provider, so the DeepSeek key later configured
+in `.env` for the product's own `curate` command could not have run it either
+without new provider code. Operator judgment: continuing to invest in a
+harness that has sat unrun is not worth it relative to moving on.
+
+### What this rules out
+
+- Any claim that CRED's structured-memory approach has been measured against
+  long context in its own regime. It has not. The only located outside
+  evidence remains the fastpaca/MemBench citation, and §1 of the now-abandoned
+  spike already found that citation too weak to lean on (4,232-token
+  long-context arm, single unreplicated blog post, extrapolated Zep cost
+  figure).
+- Reusing `v0/`'s corpus, mining, or task-drafting machinery — it is deleted,
+  not archived. Re-deriving it later is a rebuild, not a resume.
+
+### What this forces
+
+- PRD §11/§13 and `CLAUDE.md`'s gate table describe a gate that will not be
+  cleared by measurement. `CLAUDE.md` is updated in this same change to record
+  the gate as dropped rather than pending.
+- If retrieved memory turns out not to beat long context in practice, CRED
+  will find that out from real usage after release, not from a pre-registered
+  experiment. That is a materially weaker falsification path than the one
+  `v0-experiment-design.md` specified, and is accepted as a cost of this
+  decision, not a hidden one.
+
+### Open tension
+
+This reverses the explicit purpose of `docs/research/spikes/v0-experiment-design.md`
+(build and run the experiment before any product code) without the experiment
+itself producing a KILL, AMBER, or PROCEED verdict — the decision is procedural
+(unrun, deprioritized), not empirical. The PRD sections that motivated the gate
+are not amended by this entry; they still describe an experiment that will not
+happen. A reader relying on the PRD alone without also reading this entry would
+be misled about project state.

@@ -6,7 +6,10 @@
   evaluation *code* where it exists, and from papers where it does not.
 - **Commissioned by:** the open question in `v0/preregistration.md` §9 on
   extended thinking. Section 8 states the decision; everything before it is the
-  scan that produces it.
+  scan that produces it. **`v0/` was deleted 2026-07-21** (D-024 in
+  `../decision-log.md`) before the experiment ran; the commissioning question
+  and this document's findings are unaffected, but the source path no longer
+  resolves.
 
 This is an evidence document. It records what is there. The one place it
 argues — §8, the extended-thinking decision — is marked as such, because the

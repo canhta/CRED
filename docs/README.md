@@ -23,11 +23,10 @@ evidence does.
 
 ## Implementation
 
-- **[v0 harness](../v0/README.md)** — the built experiment, its stages, and what
-  an operator must supply to start it.
 - **[v0 experiment design](research/spikes/v0-experiment-design.md)** — the
-  experiment that runs before any product code, its pre-registered kill
-  threshold, and why the existing benchmark does not settle the question.
+  experiment that was designed to run before any product code, its
+  pre-registered kill threshold, why the existing benchmark does not settle the
+  question, and why the design was ultimately abandoned unrun (see D-024).
 - [Go embeddings and tokenizer](research/spikes/go-embeddings-tokenizer.md) —
   the spike that decides whether the product can be written in Go at all.
 - [Go reranker](research/spikes/go-reranker.md) — why cross-encoder reranking is

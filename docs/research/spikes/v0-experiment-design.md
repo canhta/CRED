@@ -1,13 +1,41 @@
 # v0 Experiment Design — Does retrieved memory beat plain long context?
 
 - **Date:** 2026-07-20
-- **Status:** Design complete, not yet run
-- **Gates:** PRD §11 (first experiment), §13 (v0 → v1)
+- **Status:** **Abandoned, unrun.** See D-024 in `../decision-log.md`.
+- **Gates:** PRD §11 (first experiment), §13 (v0 → v1) — **gate dropped, see
+  `CLAUDE.md`**
 - **Rule:** nothing in this document may be changed after the pre-registration tag
-  is cut. See §6.
+  is cut. See §6. (Moot: the tag was never cut.)
 
-This is the experiment PRD §13 makes the first deliverable. It ships no product
-code. It produces a kill decision or a proceed decision, and both are publishable.
+This is the experiment PRD §13 made the first deliverable. It shipped no
+product code. It was designed to produce a kill decision or a proceed
+decision, and both would have been publishable.
+
+## Verdict: abandoned, not decided
+
+**2026-07-21.** The `v0/` harness built against this design (see §11 for its
+shape) completed corpus assembly — mining, corpus-fetch, corpus-build, and
+indexing all ran against three public repositories — but never made a live
+model call. The `draft` stage, the first to need one, was blocked on missing
+Anthropic credentials for its full run; per operator instruction the harness
+was deleted rather than completed. Full reasoning in decision-log.md D-024.
+
+This is **not** a KILL, AMBER, or PROCEED outcome under §6. None of those
+outcomes require data this design never collected. The gate this document was
+meant to clear is recorded as dropped, not passed, in `CLAUDE.md`.
+
+What would change this verdict: rebuilding the harness (it is not archived,
+only the design below survives) and actually running it. Nothing in this
+document is disqualified by the abandonment — the critique of the fastpaca
+citation in §1, the design decisions in §2, and the threats-to-validity table
+in §10 remain the best available analysis of how to measure this question, if
+it is ever revisited.
+
+---
+
+*The section below is the original design, preserved as written. It describes
+a harness that was built and then deleted before producing a result — read it
+as a specification, not as a report of what happened.*
 
 ---
 
