@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { getClaim, getClaims, getHealth, getRecall } from './client';
-import type { ClaimsParams, RecallParams } from './client';
+import { getClaim, getClaims, getHealth, getRecall, getUsage } from './client';
+import type { ClaimsParams, RecallParams, UsageParams } from './client';
 
 export const queryKeys = {
   health: ['health'] as const,
   claims: (params: ClaimsParams) => ['claims', params] as const,
   claim: (id: string) => ['claim', id] as const,
   recall: (params: RecallParams) => ['recall', params] as const,
+  usage: (params: UsageParams) => ['usage', params] as const,
 };
 
 export function useHealth() {
@@ -38,5 +39,12 @@ export function useRecall(params: RecallParams, enabled: boolean) {
     queryKey: queryKeys.recall(params),
     queryFn: () => getRecall(params),
     enabled,
+  });
+}
+
+export function useUsage(params: UsageParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.usage(params),
+    queryFn: () => getUsage(params),
   });
 }

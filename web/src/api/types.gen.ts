@@ -188,3 +188,65 @@ export interface ClaimDetail {
   expired_reason: string;
   evidence: EvidenceItem[];
 }
+/**
+ * UsageQuery is the query string of GET /api/usage.
+ */
+export interface UsageQuery {
+  scopes: number /* int */;
+}
+/**
+ * LimitStatus is one limit's window state: what has been used, the
+ * configured ceiling, and the remaining headroom before the control binds.
+ * Remaining reuses internal/limit.Decision's own sentinel (-1 means
+ * unlimited) and Ceiling <= 0 means disabled, rather than the API inventing
+ * a second "off"/"unlimited" convention on top of the one internal/limit
+ * already has — the frontend formats both, once, the same way
+ * `cred usage` already does in the terminal.
+ */
+export interface LimitStatus {
+  window: string;
+  used: number /* int */;
+  ceiling: number /* int */;
+  remaining: number /* int */;
+  allowed: boolean;
+  reason: string;
+}
+/**
+ * ScopeCost is one scope's inference cost since the report's cutoff — "which
+ * teams actually use this", the same report `cred usage` prints.
+ */
+export interface ScopeCost {
+  scope: Scope;
+  calls: number /* int */;
+  input_tokens: number /* int */;
+  output_tokens: number /* int */;
+}
+/**
+ * ScopeGrowth is one scope's live-claim count against the growth ceiling, and
+ * how many claims the next prune pass would close.
+ */
+export interface ScopeGrowth {
+  scope: Scope;
+  live: number /* int */;
+  ceiling: number /* int */;
+  next_prune: number /* int */;
+}
+/**
+ * UsageResponse is the body of GET /api/usage: the calling principal's limit
+ * headroom, its denied-contribution count, and the org-wide cost/growth
+ * report — the same counters and the same internal/limit decisions
+ * `cred usage` prints, so the console never shows a number the enforcement
+ * path didn't also compute.
+ */
+export interface UsageResponse {
+  principal: string;
+  contribution: LimitStatus;
+  cost: LimitStatus;
+  input_tokens_used: number /* int */;
+  input_tokens_ceiling: number /* int */;
+  recall: LimitStatus;
+  denied_window: string;
+  denied: number /* int */;
+  cost_by_scope: ScopeCost[];
+  scope_growth: ScopeGrowth[];
+}

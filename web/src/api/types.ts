@@ -16,4 +16,8 @@ export type {
   RecalledClaim,
   Contribution as ArmContribution,
   RecallTimings,
+  UsageResponse,
+  LimitStatus,
+  ScopeCost,
+  ScopeGrowth,
 } from './types.gen';

@@ -1,5 +1,11 @@
 import { routes } from './routes';
-import type { ClaimDetail, ClaimList, Health, RecallResponse } from './types';
+import type {
+  ClaimDetail,
+  ClaimList,
+  Health,
+  RecallResponse,
+  UsageResponse,
+} from './types';
 
 // The principal is a seam: today it rides on a header, later an OIDC/SSO
 // middleware replaces the source without any handler changing. It is settable
@@ -87,4 +93,16 @@ export function getRecall(params: RecallParams): Promise<RecallResponse> {
   if (params.budget !== undefined) query.set('budget', String(params.budget));
 
   return request<RecallResponse>(`${routes.recall()}?${query.toString()}`);
+}
+
+export interface UsageParams {
+  scopes?: number;
+}
+
+export function getUsage(params: UsageParams = {}): Promise<UsageResponse> {
+  const query = new URLSearchParams();
+  if (params.scopes !== undefined) query.set('scopes', String(params.scopes));
+
+  const qs = query.toString();
+  return request<UsageResponse>(qs ? `${routes.usage()}?${qs}` : routes.usage());
 }
