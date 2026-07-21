@@ -15,6 +15,7 @@ type HealthResponse struct {
 	Status           string `json:"status"`
 	Version          string `json:"version"`
 	Principal        string `json:"principal"`
+	Role             string `json:"role"`
 	RegistrationOpen bool   `json:"registration_open"`
 }
 
@@ -96,8 +97,8 @@ type ClaimDetail struct {
 	Evidence      []EvidenceItem `json:"evidence"`
 }
 
-// UsageQuery is the query string of GET /api/usage.
-type UsageQuery struct {
+// OrgUsageQuery is the query string of GET /api/usage/org.
+type OrgUsageQuery struct {
 	Scopes int `json:"scopes" form:"scopes"`
 }
 
@@ -135,22 +136,29 @@ type ScopeGrowth struct {
 	NextPrune int   `json:"next_prune"`
 }
 
-// UsageResponse is the body of GET /api/usage: the calling principal's limit
-// headroom, its denied-contribution count, and the org-wide cost/growth
-// report — the same counters and the same internal/limit decisions
-// `cred usage` prints, so the console never shows a number the enforcement
-// path didn't also compute.
+// UsageResponse is the body of GET /api/usage: the calling principal's own
+// limit headroom and denied-contribution count — the same counters and the
+// same internal/limit decisions `cred usage` prints, so the console never
+// shows a number the enforcement path didn't also compute. Org-wide data
+// lives in OrgUsageResponse: a member's own view carries no other
+// principal's data.
 type UsageResponse struct {
-	Principal          string        `json:"principal"`
-	Contribution       LimitStatus   `json:"contribution"`
-	Cost               LimitStatus   `json:"cost"`
-	InputTokensUsed    int           `json:"input_tokens_used"`
-	InputTokensCeiling int           `json:"input_tokens_ceiling"`
-	Recall             LimitStatus   `json:"recall"`
-	DeniedWindow       string        `json:"denied_window"`
-	Denied             int           `json:"denied"`
-	CostByScope        []ScopeCost   `json:"cost_by_scope"`
-	ScopeGrowth        []ScopeGrowth `json:"scope_growth"`
+	Principal          string      `json:"principal"`
+	Contribution       LimitStatus `json:"contribution"`
+	Cost               LimitStatus `json:"cost"`
+	InputTokensUsed    int         `json:"input_tokens_used"`
+	InputTokensCeiling int         `json:"input_tokens_ceiling"`
+	Recall             LimitStatus `json:"recall"`
+	DeniedWindow       string      `json:"denied_window"`
+	Denied             int         `json:"denied"`
+}
+
+// OrgUsageResponse is the body of GET /api/usage/org: cost and growth by
+// scope across every principal -- "which teams actually use this", visible
+// to admins only.
+type OrgUsageResponse struct {
+	CostByScope []ScopeCost   `json:"cost_by_scope"`
+	ScopeGrowth []ScopeGrowth `json:"scope_growth"`
 }
 
 // RegisterRequest is the body of POST /api/auth/register.

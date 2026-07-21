@@ -43,6 +43,10 @@ func New(st *pg.Store, emb recall.Embedder, count recall.TokenCounter,
 		api.POST("/auth/register", s.register)
 		api.POST("/auth/login", s.login)
 		api.POST("/auth/logout", s.logout)
+
+		admin := api.Group("")
+		admin.Use(requireAdmin())
+		admin.GET("/usage/org", s.usageOrg)
 	}
 	return r
 }
@@ -61,9 +65,9 @@ type server struct {
 // package's context values.
 type principalKey struct{}
 
-// roleKey is the context key for the resolved session's role, when a session
-// (not a header) supplied the principal. Attached now so a later route guard
-// can read it without a second query; nothing reads it yet.
+// roleKey is the context key for the resolved principal's role, attached by
+// authenticate() on every path -- session and header/default alike -- and
+// read by roleFrom.
 type roleKey struct{}
 
 // principalFrom returns the principal the auth middleware resolved. Handlers
@@ -71,6 +75,18 @@ type roleKey struct{}
 func principalFrom(c *gin.Context) claim.PrincipalID {
 	if p, ok := c.Request.Context().Value(principalKey{}).(claim.PrincipalID); ok {
 		return p
+	}
+	return ""
+}
+
+// roleFrom returns the resolved principal's role ("admin" or "member"), or
+// "" when none is known -- a header/default-principal caller with no
+// console account resolves the same way as an unauthenticated one. Empty
+// never passes requireAdmin, so "role unknown" and "role member" fail
+// identically.
+func roleFrom(c *gin.Context) string {
+	if r, ok := c.Request.Context().Value(roleKey{}).(string); ok {
+		return r
 	}
 	return ""
 }
@@ -116,8 +132,30 @@ func authenticate(cfg config.Config, store *pg.Store) gin.HandlerFunc {
 			principal = claim.PrincipalID(h)
 		}
 
+		// A header/default-authenticated caller still gets its real console
+		// role, not an assumed one -- an admin using the CLI or a bearer
+		// token is still an admin. A lookup error is treated the same as no
+		// role found, matching the tolerant fall-through the session branch
+		// above already uses for its own error case.
+		role, _ := store.RoleForPrincipal(c.Request.Context(), principal)
+
 		ctx := context.WithValue(c.Request.Context(), principalKey{}, principal)
+		ctx = context.WithValue(ctx, roleKey{}, role)
 		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+// requireAdmin aborts with 403 unless the resolved principal's role is
+// "admin". Applied to a route group, never inlined in a handler -- a
+// centralized check every admin route inherits, not a conditional a future
+// edit could silently drop.
+func requireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if roleFrom(c) != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, ErrorResponse{Error: "admin role required"})
+			return
+		}
 		c.Next()
 	}
 }
@@ -146,6 +184,7 @@ func (s *server) health(c *gin.Context) {
 		Status:           "ok",
 		Version:          mcpsrv.Version,
 		Principal:        string(principalFrom(c)),
+		Role:             roleFrom(c),
 		RegistrationOpen: count == 0,
 	})
 }
