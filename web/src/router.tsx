@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-router';
 import { Shell } from './app/Shell';
 import { ClaimsPage } from './pages/ClaimsPage';
+import { RecallPage } from './pages/RecallPage';
 import { Placeholder } from './pages/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -34,7 +35,7 @@ const claimsRoute = createRoute({
 const recallRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/recall',
-  component: () => <Placeholder title="Recall" />,
+  component: RecallPage,
 });
 
 const usageRoute = createRoute({

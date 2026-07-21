@@ -16,31 +16,40 @@ import (
 	"github.com/canhta/cred/internal/claim"
 	"github.com/canhta/cred/internal/config"
 	"github.com/canhta/cred/internal/mcpsrv"
+	"github.com/canhta/cred/internal/recall"
 	"github.com/canhta/cred/internal/store/pg"
 )
 
-// New builds the console's API handler over an existing store. The caller wraps
-// it so /api routes reach this engine and everything else serves the SPA.
-func New(st *pg.Store, cfg config.Config, log *slog.Logger) http.Handler {
+// New builds the console's API handler over an existing store. The embedder and
+// token counter power the recall inspector; both may be nil, in which case that
+// one endpoint reports itself unavailable and the rest of the console is
+// unaffected. The caller wraps the handler so /api routes reach this engine and
+// everything else serves the SPA.
+func New(st *pg.Store, emb recall.Embedder, count recall.TokenCounter,
+	cfg config.Config, log *slog.Logger,
+) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(requestLogger(log), gin.Recovery(), authenticate(cfg))
 
-	s := &server{store: st, cfg: cfg, log: log}
+	s := &server{store: st, embedder: emb, count: count, cfg: cfg, log: log}
 	api := r.Group("/api")
 	{
 		api.GET("/health", s.health)
 		api.GET("/claims", s.listClaims)
 		api.GET("/claims/:id", s.getClaim)
+		api.GET("/recall", s.recall)
 	}
 	return r
 }
 
 // server holds the dependencies each handler needs.
 type server struct {
-	store *pg.Store
-	cfg   config.Config
-	log   *slog.Logger
+	store    *pg.Store
+	embedder recall.Embedder
+	count    recall.TokenCounter
+	cfg      config.Config
+	log      *slog.Logger
 }
 
 // principalKey is the context key the auth middleware stores the resolved

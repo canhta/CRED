@@ -12,4 +12,8 @@ export type {
   ClaimListResponse as ClaimList,
   EvidenceItem as Evidence,
   ClaimDetail,
+  RecallResponse,
+  RecalledClaim,
+  Contribution as ArmContribution,
+  RecallTimings,
 } from './types.gen';

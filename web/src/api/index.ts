@@ -5,8 +5,9 @@ export {
   getHealth,
   getClaims,
   getClaim,
+  getRecall,
   setPrincipal,
   getPrincipal,
 } from './client';
-export type { ClaimsParams, StatusFilter } from './client';
-export { useHealth, useClaims, useClaim, queryKeys } from './hooks';
+export type { ClaimsParams, StatusFilter, RecallParams } from './client';
+export { useHealth, useClaims, useClaim, useRecall, queryKeys } from './hooks';

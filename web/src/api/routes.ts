@@ -7,4 +7,5 @@ export const routes = {
   health: () => `${API_BASE}/health`,
   claims: () => `${API_BASE}/claims`,
   claim: (id: string) => `${API_BASE}/claims/${encodeURIComponent(id)}`,
+  recall: () => `${API_BASE}/recall`,
 } as const;

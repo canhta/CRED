@@ -18,6 +18,7 @@ import (
 
 	"github.com/canhta/cred/internal/api"
 	"github.com/canhta/cred/internal/config"
+	"github.com/canhta/cred/internal/recall"
 )
 
 // WebAssets is the built SPA, set from package main before Run. It is non-nil
@@ -41,10 +42,27 @@ func runWeb(ctx context.Context, args []string, cfg config.Config,
 	}
 	defer st.Close()
 
+	// The recall inspector needs the embedding model and the exact tokenizer. If
+	// the model is unavailable the console still serves everything else and only
+	// recall reports itself unavailable, so a missing model is not a dead server.
+	var emb recall.Embedder
+	var count recall.TokenCounter
+	e, err := openEmbedder(ctx, cfg)
+	if err != nil {
+		fmt.Fprintf(stderr, "cred web  recall disabled: %v\n", err)
+	} else {
+		defer func() { _ = e.Close() }()
+		count, err = tokenCounter()
+		if err != nil {
+			return err
+		}
+		emb = e
+	}
+
 	// One engine serves both surfaces: /api routes are registered by api.New,
 	// and the SPA (with its history fallback) is the NoRoute handler on the same
 	// engine, so a single server answers the API and the console alike.
-	handler := api.New(st, cfg, log)
+	handler := api.New(st, emb, count, cfg, log)
 	engine, ok := handler.(*gin.Engine)
 	if !ok {
 		return fmt.Errorf("web: api handler is not a *gin.Engine")

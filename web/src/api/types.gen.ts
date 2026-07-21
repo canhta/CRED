@@ -17,6 +17,75 @@ its caller may not read would be the access-control failure, now over HTTP.
 
 
 //////////
+// source: recall.go
+
+/**
+ * RecallQuery is the query string of GET /api/recall.
+ */
+export interface RecallQuery {
+  q: string;
+  limit: number /* int */;
+  depth: number /* int */;
+  budget: number /* int */;
+}
+/**
+ * Contribution is what one retrieval arm added to a claim's fused rank: the
+ * arm's name, the rank it gave the claim, its raw score, and the reciprocal-rank
+ * points that rank contributed. It is the per-arm reason a result placed where
+ * it did.
+ */
+export interface Contribution {
+  arm: string;
+  rank: number /* int */;
+  raw: number /* float64 */;
+  score: number /* float64 */;
+}
+/**
+ * RecalledClaim is one recall result carrying why it ranked.
+ */
+export interface RecalledClaim {
+  id: string;
+  statement: string;
+  kind: string;
+  scope: Scope;
+  status: string;
+  source?: Source;
+  score: number /* float64 */;
+  tokens: number /* int */;
+  contributions: Contribution[];
+}
+/**
+ * RecallTimings is where a recall's latency went, per arm, in milliseconds.
+ */
+export interface RecallTimings {
+  embed_ms: number /* float64 */;
+  dense_ms: number /* float64 */;
+  lexical_ms: number /* float64 */;
+  load_ms: number /* float64 */;
+  total_ms: number /* float64 */;
+}
+/**
+ * RecallResponse is the body of GET /api/recall: the ranked claims plus the
+ * retrieval accounting that explains them. Candidates is what fusion saw,
+ * Authorized is what survived access control, and OmittedForBudget is what the
+ * token ceiling dropped — reported so a short result is never a silent one.
+ */
+export interface RecallResponse {
+  query: string;
+  claims: RecalledClaim[];
+  candidates: number /* int */;
+  authorized: number /* int */;
+  omitted_for_budget: number /* int */;
+  tokens_used: number /* int */;
+  token_budget: number /* int */;
+  dominant_arm: string;
+  dominant_share: number /* float64 */;
+  as_of: string;
+  staleness_seconds: number /* float64 */;
+  timings: RecallTimings;
+}
+
+//////////
 // source: types.go
 
 /**
