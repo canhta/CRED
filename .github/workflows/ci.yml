@@ -1,0 +1,135 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Without this, Go silently downloads a newer toolchain and the matrix below
+  # is a lie.
+  GOTOOLCHAIN: local
+
+jobs:
+  # Fails fast on the cheapest signal.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+      - run: go mod tidy && git diff --exit-code
+      - uses: golangci/golangci-lint-action@v9
+        with: { version: v2.12.2 }
+
+  # The CGO guard, in its two-assertion form.
+  #
+  # Neither assertion alone is sufficient, and the intuitive single check is
+  # vacuous. Under CGO_ENABLED=0 a cgo-only dependency makes `go list` write to
+  # stderr and emit nothing on stdout, so a `[ -z "$(... 2>/dev/null)" ]` test
+  # reports clean while the build is broken — the same failure shape that got
+  # `go tool nm | grep cgo` rejected, arrived at from a different direction.
+  cgo-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+
+      - name: Assertion 1 — nothing in the dependency tree uses cgo
+        # Must run with CGO_ENABLED=1. Under =0 the build constraints hide the
+        # cgo files and this check proves nothing.
+        run: |
+          set -euo pipefail
+          found=$(CGO_ENABLED=1 go list \
+            -f '{{if .CgoFiles}}{{.ImportPath}}{{end}}' -deps ./... \
+            | grep -v '^runtime/cgo$' || true)
+          if [ -n "$found" ]; then
+            echo "cgo packages in the dependency tree:"
+            echo "$found"
+            exit 1
+          fi
+          echo "no cgo packages"
+
+      - name: Assertion 2 — the shipping build succeeds with cgo disabled
+        # Never swallow stderr; never ignore the exit code.
+        run: CGO_ENABLED=0 go build ./...
+
+      - name: The binary is statically linked
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -o /tmp/cred .
+          file /tmp/cred | tee /dev/stderr | grep -q 'statically linked'
+
+  # Unit and property tests. No database.
+  test-unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Current and previous only. Anything wider is maintenance with no
+        # signal attached.
+        go: ['1.25', '1.26']
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v6
+        with: { go-version: ${{ matrix.go }} }
+      - run: go test -shuffle=on ./...
+
+  test-integration:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        # Same pin as docker-compose.yml. PG18's PGDATA change causes silent
+        # data loss, and a CI image that drifts from the shipped one tests
+        # something nobody runs.
+        image: pgvector/pgvector:0.8.5-pg17
+        env:
+          POSTGRES_USER: cred
+          POSTGRES_PASSWORD: cred
+          POSTGRES_DB: cred
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U cred -d cred"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      # A skipped test and a passing test are the same green check. Locally,
+      # skipping when Postgres is absent is a developer affordance; here it is
+      # a failure, because a broken database setup would otherwise produce a
+      # green build with zero integration coverage, silently.
+      CRED_REQUIRE_DB: '1'
+      DATABASE_URL: postgres://cred:cred@127.0.0.1:5433/cred?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/cred/models
+          key: bge-small-en-v1.5-onnx
+
+      - run: go test -tags=integration -shuffle=on ./...
+
+  # Single job, not across the matrix: the cheapest way to get race coverage.
+  test-race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+      - run: go test -race ./...

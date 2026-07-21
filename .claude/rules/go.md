@@ -53,6 +53,7 @@ internal/
   temporal/              bi-temporal algebra. PURE.
   acl/                   ACL intersection algebra. PURE.
   recall/                retrieval orchestration, RRF fusion
+  seed/                  cold-start ingestion from documentation
   nominate/              the LLM boundary: Nominate() + fake + adapters
   curate/                River workers
   store/
@@ -164,7 +165,8 @@ were not designed to treat it as such.
 
 Every dependency is a maintenance liability for a solo maintainer. The accepted
 set is the standard library, `pgx`, `goose`, `River`, the MCP Go SDK, the
-`onnx-gomlx` embedding stack, and `testify/require`.
+`onnx-gomlx` embedding stack, `testify/require`, and `golang.org/x/text` (NFD
+normalization for the tokenizer, which the standard library does not provide).
 
 Anything beyond that needs a reason recorded in the commit message. Prefer
 copying thirty lines over adding a module for them.

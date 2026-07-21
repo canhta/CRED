@@ -1,0 +1,42 @@
+services:
+  db:
+    # Pin pg17, not pg18.
+    #
+    # PG18 changed PGDATA to a version-specific path: mount
+    # /var/lib/postgresql on 18+, but /var/lib/postgresql/data on 17 and
+    # earlier. The official image documentation warns in capitals that the
+    # wrong path on <=17 will not persist data. One wrong volume line, total
+    # loss, no error message.
+    image: pgvector/pgvector:0.8.5-pg17
+    environment:
+      POSTGRES_USER: ${CRED_DB_USER:-cred}
+      POSTGRES_PASSWORD: ${CRED_DB_PASSWORD:-cred}
+      POSTGRES_DB: ${CRED_DB_NAME:-cred}
+    volumes:
+      - cred-db:/var/lib/postgresql/data
+    ports:
+      # 5433, not 5432. Port 5432 collides with the Postgres half the audience
+      # already runs, and a collision on first run reads as "it is broken".
+      # Bound to loopback: exposing a database to the network should be a
+      # deliberate act.
+      - "127.0.0.1:${CRED_DB_PORT:-5433}:5432"
+    healthcheck:
+      # Name the database. During initialization the entrypoint runs a
+      # temporary local-socket server, and a bare `pg_isready` passes against
+      # it — letting the application race real startup.
+      test: ["CMD-SHELL", "pg_isready -U ${CRED_DB_USER:-cred} -d ${CRED_DB_NAME:-cred}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+# No resource limits in the default file. A limit tuned for one laptop
+# OOM-kills someone else's worker and presents as a mystery restart loop. The
+# real floor is roughly 2 GB, and the embedding forward pass is the largest
+# single consumer; ship limits as an opt-in overlay if you need them.
+#
+# Every variable uses ${VAR:-default}, so this file works with no .env at all.
+# A .env.example you must copy first is a step, and steps cost users.
+
+volumes:
+  cred-db:

@@ -1,0 +1,116 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    # Majority of the eight surveyed configurations.
+    - misspell
+    - revive
+    - unconvert
+    - gocritic
+    - gosec
+    # Correctness, high signal, low noise.
+    - errorlint
+    - bodyclose
+    - nilerr
+    - rowserrcheck
+    - sqlclosecheck
+    - nolintlint
+    - testifylint
+    # CRED-specific, load-bearing.
+    - depguard
+    - usetesting
+
+  # Deliberately absent: cyclop, gocyclo, gocognit, funlen, maintidx, mnd,
+  # err113, ireturn. Complexity metrics produce a constant low-grade tax with
+  # no correctness signal, and the failure mode for a solo maintainer is not
+  # "code gets complex" — it is "maintainer adds //nolint reflexively, then
+  # stops reading lint output entirely". A linter that trains you to ignore
+  # linters is negative value. The trade-off, named: sprawling functions are
+  # not caught mechanically here and must be caught in review.
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    govet:
+      enable-all: true
+      disable:
+        # shadow and nilness are why enable-all is on. fieldalignment demands
+        # struct reordering for memory padding and is pure churn at CRED's
+        # data volumes.
+        - fieldalignment
+
+    gocritic:
+      disable-all: true
+      enabled-checks:
+        - appendAssign
+        - argOrder
+        - badCond
+        - caseOrder
+        - dupArg
+        - dupCase
+        - nilValReturn
+        - offBy1
+        - weakCond
+
+    gosec:
+      excludes:
+        - G115 # integer overflow on conversion; securego/gosec#1212
+        - G404 # weak RNG; CRED uses math/rand for jitter, not for secrets
+        - G301 # directory permissions; relies on umask
+        - G306 # file permissions; relies on umask
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    testifylint:
+      enable-all: true
+
+    depguard:
+      # The most important entry in this file. It is what converts the
+      # temporal/ACL purity law from a sentence an agent can agree with and
+      # then violate into a build failure.
+      rules:
+        pure-algebra:
+          list-mode: lax
+          files:
+            - "**/internal/temporal/**"
+            - "**/internal/acl/**"
+          deny:
+            - pkg: "github.com/jackc/pgx"
+              desc: >-
+                Temporal and ACL algebra must be pure. Postgres stores and
+                filters; it does not decide. See testing-strategy.md.
+            - pkg: "database/sql"
+              desc: "Same law."
+            - pkg: "github.com/canhta/cred/internal/store"
+              desc: >-
+                Same law, one level up: importing the store is how a
+                connection reaches these packages in the first place.
+        driver-isolation:
+          list-mode: lax
+          files:
+            - "**/internal/**"
+            - "!**/internal/store/pg/**"
+          deny:
+            - pkg: "github.com/jackc/pgx"
+              desc: "Only internal/store/pg may import the database driver."
+
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - path: '_test\.go'
+        linters:
+          - gosec # G101 fires on fixture credentials
+          - bodyclose
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
