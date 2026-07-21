@@ -239,7 +239,8 @@ aws dynamodb describe-table --table-name cred-tfstate-lock --profile canhta \
 - [ ] **Step 4: Commit**
 
 ```bash
-git add infra/terraform/bootstrap/main.tf
+git add infra/terraform/bootstrap/main.tf infra/terraform/bootstrap/.gitignore \
+  infra/terraform/bootstrap/.terraform.lock.hcl
 git commit -m "infra: bootstrap the Terraform state backend (S3 + DynamoDB lock)"
 ```
 
