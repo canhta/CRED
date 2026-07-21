@@ -5,6 +5,8 @@ evidence does.
 
 ## Start here
 
+- **[Quickstart](../QUICKSTART.md)** — get CRED running locally in a few minutes.
+- [Benchmarks](benchmarks.md) — reproduced measurements and their conditions.
 - **[Research synthesis](research/synthesis.md)** — what the discovery phase
   found, what it killed, and what survives. Read this first.
 - [Decision log](research/decision-log.md) — decisions made, with reasoning and
