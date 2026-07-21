@@ -541,3 +541,26 @@ func TestCreateUserSecondAdminReturnsErrAdminExists(t *testing.T) {
 	_, err = st.CreateUser(ctx, uniqueEmail(t, "admin2"), "hash", "admin")
 	require.ErrorIs(t, err, pg.ErrAdminExists)
 }
+
+// TestRoleForPrincipalResolvesRealRoleOrEmpty covers both callers this
+// backs: authenticate()'s session path already gets role from
+// SessionPrincipal, but the header/default-principal path calls this
+// directly. A principal with a user_credentials row resolves its real role;
+// a principal with none (a team/org/agent principal, or a header/default
+// value with no console account) resolves "" rather than an error -- having
+// no console account is the normal case for most principals, not a failure.
+func TestRoleForPrincipalResolvesRealRoleOrEmpty(t *testing.T) {
+	st := openTestStore(t)
+	ctx := t.Context()
+
+	principal, err := st.CreateUser(ctx, uniqueEmail(t, "roleforprincipal"), "hash", "member")
+	require.NoError(t, err)
+
+	role, err := st.RoleForPrincipal(ctx, principal)
+	require.NoError(t, err)
+	require.Equal(t, "member", role)
+
+	role, err = st.RoleForPrincipal(ctx, claim.PrincipalID("no-such-principal"))
+	require.NoError(t, err)
+	require.Empty(t, role)
+}

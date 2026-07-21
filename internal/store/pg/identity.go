@@ -127,3 +127,15 @@ func (s *Store) FailedLoginsInWindow(ctx context.Context, email string, since ti
 		email, since).Scan(&n)
 	return n, translate(err)
 }
+
+// RoleForPrincipal resolves a principal's console role. A scalar subquery,
+// not a plain SELECT, so a principal with no user_credentials row resolves
+// to "" rather than ErrNotFound -- having no console account is the normal
+// case for most principals, not a failure.
+func (s *Store) RoleForPrincipal(ctx context.Context, principal claim.PrincipalID) (string, error) {
+	var role string
+	err := s.pool.QueryRow(ctx, `
+		SELECT coalesce((SELECT role FROM user_credentials WHERE principal_id = $1), '')`,
+		string(principal)).Scan(&role)
+	return role, translate(err)
+}
