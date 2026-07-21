@@ -33,13 +33,13 @@ Commands:
   migrate            Apply database migrations (CRED schema + River tables)
   seed <path>        Seed claims from a repository's documentation
   recall <query>     Retrieve claims, showing why each one ranked
-  reanchor [path]    Re-check anchors (L3); expire claims whose source changed
+  reanchor [path]    Re-check anchors; expire claims whose source changed
   remember <text>    Contribute a claim by attestation (no API key needed)
   capture            Enqueue material for automatic extraction (hook entry point)
   curate             Run the background worker: nominate off the turn, dedup
-  log                Show recent writes (visible, per D-016)
-  forget <id>        Reverse a write by expiring its claim (per D-016)
-  usage              Show per-principal quota state and per-scope cost (section 8)
+  log                Show recent writes (every write is visible)
+  forget <id>        Reverse a write by expiring its claim
+  usage              Show per-principal quota state and per-scope cost
   serve              Run the MCP server over stdio (recall + remember)
   doctor             Check the installation and name the fix for anything broken
 
@@ -60,8 +60,8 @@ Environment:
   CRED_RECALL_RATE             Recalls per principal per window (default 120)
   CRED_SCOPE_CLAIM_CEILING     Live claims per scope before pruning (default 5000)
 
-The usage limits (section 8) ship on by default with working ceilings; a
-non-positive override disables that one control. See them with cred usage.
+The usage limits ship on by default with working ceilings; a non-positive
+override disables that one control. See them with cred usage.
 
 Reads and explicit remember need no API key. Only curate — the automatic
 nomination worker — does. Every write is visible (cred log) and reversible

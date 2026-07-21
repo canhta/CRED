@@ -40,7 +40,7 @@ func runRemember(ctx context.Context, args []string, cfg config.Config, log *slo
 	defer func() { _ = emb.Close() }()
 
 	// Attestation is deterministic and key-free: the person asserting the claim
-	// is its evidence (L1).
+	// is its evidence.
 	id, err := newExecutor(st, emb, log).Attest(ctx, statement, *kind, claim.PrincipalID(cfg.Principal))
 	if err != nil {
 		return fmt.Errorf("remember: %w", err)
@@ -76,7 +76,7 @@ func runLog(ctx context.Context, args []string, cfg config.Config, out io.Writer
 		return nil
 	}
 
-	// Every automatic write is visible here (D-016): what was stored, when, and
+	// Every automatic write is visible here: what was stored, when, and
 	// whether it is still live or was later superseded or forgotten.
 	for _, e := range entries {
 		status := "live"

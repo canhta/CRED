@@ -14,7 +14,7 @@ import (
 
 // These tests take no database and no connection. internal/anchor is pure, like
 // internal/temporal and internal/acl; if a test here needs either, the boundary
-// this package exists to hold has already been broken. They are the L3 law:
+// this package exists to hold has already been broken. They are the ladder's law:
 // formatting churn survives, a real edit expires, an insertion above does not
 // silently re-anchor, and ambiguity expires rather than guesses.
 
@@ -75,7 +75,7 @@ func TestComputeProducesHeadingPath(t *testing.T) {
 func TestFormattingChurnDoesNotExpire(t *testing.T) {
 	// Tier 4 changes (every byte of the section is reflowed and re-spaced) while
 	// tiers 1 and 2 hold. A pure-formatting commit must expire zero claims —
-	// PRD acceptance criterion 4, and the whole reason the ladder exists.
+	// the whole reason the ladder exists.
 	a := anchorFor(t, baseDoc, "cross-encoder is cut")
 
 	reformatted := strings.NewReplacer(
@@ -108,7 +108,7 @@ func TestSemanticEditExpires(t *testing.T) {
 }
 
 func TestInsertionAboveDoesNotSilentlyReAnchor(t *testing.T) {
-	// The failure L3 exists to prevent. Insert a whole new section above the
+	// The failure the ladder exists to prevent. Insert a whole new section above the
 	// anchored one. Every line of "D-010 > Reasoning" now sits at a different
 	// line number, so a tier-4 line-range hash would be looking at other text.
 	// The ladder resolves by heading path instead: the claim stays anchored to
@@ -158,7 +158,7 @@ func TestRemovedSectionExpires(t *testing.T) {
 func TestUnanchoredEvidenceIsNeverExpired(t *testing.T) {
 	// A pre-existing tier-4-only row, or an attestation: no tier-1/2 anchor. The
 	// ladder does not apply. It must never expire on tier 4 alone — that is the
-	// exact over-expiry L3 forbids.
+	// exact over-expiry the ladder forbids.
 	tierFourOnly := anchor.Anchor{ByteHash: rawHash("some bytes")}
 	require.False(t, tierFourOnly.Anchored())
 

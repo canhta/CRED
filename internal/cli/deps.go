@@ -55,8 +55,8 @@ func newExecutor(st *pg.Store, emb *embed.BGE, log *slog.Logger) *curate.Executo
 //
 // The extractor is given a store-backed UsageSink, so every model call records
 // its cost — calls, tokens, wall-clock — to the ledger, attributed to the
-// principal and scope that occasioned it (PRD 8). That is the "cost attribution
-// at the nominate boundary" the cost ceiling later reads.
+// principal and scope that occasioned it. That is the cost attribution at the
+// nominate boundary that the cost ceiling later reads.
 func newNominator(cfg config.Config, st *pg.Store, log *slog.Logger) (nominate.Nominator, error) {
 	// The base URL picks the dialect. Empty is Anthropic (Claude); any value is
 	// OpenAI-compatible, which covers OpenAI, DeepSeek, and self-hosted servers.

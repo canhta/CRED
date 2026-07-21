@@ -121,7 +121,7 @@ func waitForWrite(t *testing.T, st *pg.Store, marker string) pg.WriteEntry {
 // TestEnqueueNominateWritesClaimWithEvidence is the write-path vertical: a
 // trigger enqueues captured material, the worker extracts it off the turn with
 // the fake nominator, and a claim lands with evidence pointing back at the
-// source span (L1).
+// source span.
 func TestEnqueueNominateWritesClaimWithEvidence(t *testing.T) {
 	st := openStore(t)
 	marker := fmt.Sprintf("curate-int-%d", time.Now().UnixNano())
@@ -146,16 +146,16 @@ func TestEnqueueNominateWritesClaimWithEvidence(t *testing.T) {
 	require.Nil(t, entry.SupersededAt, "a fresh write is live")
 
 	// The claim reached the store with evidence, and the evidence is the source
-	// span the fake quoted — not free text (L1, L8).
+	// span the fake quoted — not free text.
 	ev, err := st.LoadEvidence(t.Context(), []string{entry.ID})
 	require.NoError(t, err)
-	require.NotEmpty(t, ev[entry.ID], "L1: a written claim reached the store with no evidence")
+	require.NotEmpty(t, ev[entry.ID], "a written claim reached the store with no evidence")
 	require.Contains(t, ev[entry.ID][0].ExtractedText, marker)
 	require.Positive(t, ev[entry.ID][0].LineStart)
 }
 
 // TestDedupSupersedesDuplicateWrites — automatic writes at every third turn
-// produce duplicates by construction (D-017). The dedup pass folds an exact
+// produce duplicates by construction. The dedup pass folds an exact
 // restatement into its predecessor via the bi-temporal machinery, leaving one
 // live claim and one superseded, linked.
 func TestDedupSupersedesDuplicateWrites(t *testing.T) {
@@ -217,12 +217,12 @@ func insertPrincipal(t *testing.T, st *pg.Store, id string) {
 	require.NoError(t, err)
 }
 
-// TestContributionQuotaDeniesLoudly is the section-8 security control under the
-// off-the-turn write path (D-017): once a principal is at its contribution
+// TestContributionQuotaDeniesLoudly is the usage-limit security control under the
+// off-the-turn write path: once a principal is at its contribution
 // quota, the next automatic write is refused — and the refusal is loud, not a
 // silent drop. The refused claim never lands, and a 'denied' row is recorded so
 // the exhaustion is queryable (`cred usage`). A silent drop here is exactly how
-// a poisoning attempt would hide (L8), which is why this is a security test
+// a poisoning attempt would hide, which is why this is a security test
 // first and a capacity test second.
 func TestContributionQuotaDeniesLoudly(t *testing.T) {
 	st := openStore(t)

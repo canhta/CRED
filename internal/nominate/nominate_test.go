@@ -24,7 +24,7 @@ func TestValidRejectsOutOfSchema(t *testing.T) {
 	}{
 		{"unknown kind", func(c *nominate.Candidate) { c.Kind = "Opinion" }},
 		{"empty statement", func(c *nominate.Candidate) { c.Statement = "  " }},
-		{"empty quote — L1 has no span", func(c *nominate.Candidate) { c.Quote = "" }},
+		{"empty quote has no supporting span", func(c *nominate.Candidate) { c.Quote = "" }},
 		{"confidence above 1", func(c *nominate.Candidate) { c.Confidence = 1.7 }},
 		{"confidence below 0", func(c *nominate.Candidate) { c.Confidence = -0.1 }},
 	}
@@ -71,7 +71,7 @@ func (m *stubModel) Generate(_ context.Context, _ string, _ []byte) ([]byte, str
 
 func TestExtractorDiscardsTruncatedResponse(t *testing.T) {
 	// A truncated response under constrained decoding is a valid JSON prefix
-	// that parses cleanly and is silently wrong. It must never be parsed (L2).
+	// that parses cleanly and is silently wrong. It must never be parsed.
 	valid := `{"candidates":[{"kind":"Decision","statement":"use RRF","quote":"use RRF","confidence":0.8}]}`
 	m := &stubModel{responses: []stubResponse{
 		{raw: valid, stop: nominate.StopLength}, // truncated: discard, retry
@@ -97,7 +97,7 @@ func TestExtractorFailsWhenEveryAttemptTruncates(t *testing.T) {
 func TestExtractorDropsInvalidCandidatesKeepsValid(t *testing.T) {
 	// One valid candidate, one with an out-of-schema kind, one with confidence
 	// out of range. Code decides: the valid one survives, the others are gone,
-	// and the batch is not abandoned because two members were bad (L2).
+	// and the batch is not abandoned because two members were bad.
 	raw := `{"candidates":[
 		{"kind":"Decision","statement":"keep me","quote":"keep me","confidence":0.9},
 		{"kind":"Opinion","statement":"drop me","quote":"drop me","confidence":0.5},

@@ -4,7 +4,7 @@
 // This package is data only. The algebra over these types lives in
 // internal/temporal and internal/acl, which are pure and which depguard
 // forbids from importing a database driver. Keeping the types here and the
-// decisions there is what stops L5 from becoming a SQL predicate.
+// decisions there is what stops access control from becoming a SQL predicate.
 package claim
 
 import "time"
@@ -12,7 +12,7 @@ import "time"
 // PrincipalID identifies a principal — a person, a team, an organization, or
 // an agent.
 //
-// D-014's standing check, run against CRED itself: grep the engine for the
+// A standing check, run against CRED itself: grep the engine for the
 // principal type; if it only appears in a client package, the retreat has
 // already happened. This slice ships one principal, and the type still lives
 // here, because retrofitting it later is the expensive move and every
@@ -38,7 +38,7 @@ type Principal struct {
 
 // Grant is one entry in an access-control set.
 //
-// ExpiresAt is not optional in spirit: L5 requires every ACL entry to carry a
+// ExpiresAt is not optional in spirit: every ACL entry is required to carry a
 // TTL, and a zero value means "no expiry", which internal/acl treats as valid
 // forever. Stale permission data must deny rather than grant, so expiry is
 // evaluated at recall against a caller-supplied clock, never cached.
@@ -48,10 +48,10 @@ type Grant struct {
 }
 
 // ACL is a set of grants. The empty ACL is reachable by nobody — treating it
-// as public is the fail-open bug (testing-strategy adversarial case 1).
+// as public is the fail-open bug.
 type ACL []Grant
 
-// Kind determines a claim's validity semantics. Closed set, per the PRD.
+// Kind determines a claim's validity semantics. Closed set.
 type Kind string
 
 const (
@@ -98,7 +98,7 @@ const (
 	SourceAttestation SourceKind = "attestation"
 )
 
-// Evidence is what a claim rests on. L1: a claim with no evidence cannot be
+// Evidence is what a claim rests on. A claim with no evidence cannot be
 // written.
 type Evidence struct {
 	ID   string
@@ -116,10 +116,10 @@ type Evidence struct {
 
 	// ContentSHA256 is the change detector. Re-seeding compares it and skips
 	// unchanged chunks, which is what makes seeding idempotent. It is also tier 4
-	// of the L3 anchor ladder — the raw byte hash, diagnostic only.
+	// of the anchor ladder — the raw byte hash, diagnostic only.
 	ContentSHA256 string
 
-	// The semantic anchor (L3), tiers 1–3. Computed at ingest by internal/anchor
+	// The semantic anchor, tiers 1–3. Computed at ingest by internal/anchor
 	// from the whole source file, stored here, and re-resolved when the file
 	// changes. Empty on attestations and on evidence written before anchoring
 	// shipped — such rows are tier-4-only and re-anchoring leaves them untouched.
@@ -159,7 +159,7 @@ type Claim struct {
 
 	ACL ACL
 
-	// Evidence is populated by the store on load. L1 makes an empty slice a
+	// Evidence is populated by the store on load. An empty slice is a
 	// bug, not a state.
 	Evidence []Evidence
 }

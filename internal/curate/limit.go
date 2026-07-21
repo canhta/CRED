@@ -12,12 +12,12 @@ import (
 	"github.com/canhta/cred/internal/store/pg"
 )
 
-// This file is the store-backed enforcement of PRD section 8 on the write side:
-// the cost-attribution recorder wired at the nominate boundary, the
+// This file is the store-backed enforcement of the usage limits on the write
+// side: the cost-attribution recorder wired at the nominate boundary, the
 // contribution-quota and cost-ceiling gate on the automatic write path, and the
 // scope-growth pruner. The decision in each is internal/limit's (pure); the
 // counters and the persistence are the store's. This package is the only side
-// of the LLM boundary that may reach the store (L2), which is why the glue lives
+// of the LLM boundary that may reach the store, which is why the glue lives
 // here and not in internal/nominate.
 
 // firstPrincipal is the contributing principal a job is attributed to. This
@@ -37,9 +37,8 @@ type UsageStore interface {
 
 // UsageRecorder implements nominate.UsageSink: it writes one inference event to
 // the cost ledger per model call, attributed to the Input's principal and scope.
-// This is the "cost attribution recorded at the nominate boundary" half of PRD
-// section 8 — inference calls, tokens, and wall-clock, per principal and per
-// scope.
+// This is the cost-attribution half of the usage limits — inference calls,
+// tokens, and wall-clock, per principal and per scope.
 type UsageRecorder struct {
 	store UsageStore
 	log   *slog.Logger
@@ -84,9 +83,9 @@ type LimitStore interface {
 // and written, it checks the principal's cost ceiling and contribution quota. On
 // exhaustion it denies — and the denial is loud, never a silent no-op: it is
 // recorded to the ledger and logged at Warn with the machine reason. Under the
-// off-the-turn write path (D-017) that loudness is the whole point. A silent
-// drop of a write there is indistinguishable from a suppressed poisoning attempt
-// (L8), so exhaustion is made observable rather than swallowed.
+// off-the-turn write path that loudness is the whole point. A silent
+// drop of a write there is indistinguishable from a suppressed poisoning attempt,
+// so exhaustion is made observable rather than swallowed.
 type Limiter struct {
 	store LimitStore
 	cfg   limit.Config
@@ -129,7 +128,7 @@ func (l *Limiter) Admit(ctx context.Context, principal claim.PrincipalID, scope 
 
 // deny makes an exhaustion loud: a structured Warn (exported through obs'
 // attribute names) and a recorded 'denied' ledger row queryable via `cred
-// usage`. Never the source or the statement (L8) — only identifiers, the scope,
+// usage`. Never the source or the statement — only identifiers, the scope,
 // and the machine reason.
 func (l *Limiter) deny(ctx context.Context, principal claim.PrincipalID, scope claim.Scope, reason limit.Reason, now time.Time) {
 	if l.log != nil {
@@ -203,7 +202,7 @@ func (p *Pruner) Prune(ctx context.Context, scope claim.Scope) (PruneReport, err
 	}
 	rep.Pruned = n
 	if p.log != nil && n > 0 {
-		// Identifiers and counts only — never claim text (L8).
+		// Identifiers and counts only — never claim text.
 		p.log.Info("pruned scope",
 			slog.String(obs.AttrScopeKind, string(scope.Kind)),
 			slog.String(obs.AttrScopeValue, scope.Value),

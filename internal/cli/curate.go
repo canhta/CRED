@@ -44,8 +44,8 @@ func runCurate(ctx context.Context, args []string, cfg config.Config, log *slog.
 
 	exec := newExecutor(st, emb, log)
 	rec := curate.NewReconciler(st, log)
-	// The section-8 write-path controls: the contribution-quota/cost-ceiling gate
-	// and the scope-growth pruner, both over the resolved policy.
+	// The write-path controls: the contribution-quota/cost-ceiling gate and the
+	// scope-growth pruner, both over the resolved policy.
 	limiter := curate.NewLimiter(st, cfg.Limits, log)
 	pruner := curate.NewPruner(st, cfg.Limits, log)
 

@@ -1,8 +1,8 @@
 // Package seed performs cold-start ingestion from a repository's own
 // documentation.
 //
-// Documentation, never git history. That is D-016, and the reason is CRED's
-// own thesis rather than convenience: a claim anchored to AGENTS.md:42 expires
+// Documentation, never git history. The reason is CRED's own thesis rather
+// than convenience: a claim anchored to AGENTS.md:42 expires
 // when that file changes, while a claim extracted from commit abc123 has
 // immutable evidence and can therefore never expire. Seeding from history
 // would fill the store with permanently unfalsifiable claims — the exact
@@ -10,8 +10,9 @@
 // constraint on what may be ingested, not decoration.
 //
 // Nothing here calls a model. Chunking is deterministic and the claim
-// statement is derived mechanically from the heading path, so L2 is not merely
-// respected, it is unexercised: there is no nomination step to constrain.
+// statement is derived mechanically from the heading path, so the nomination
+// constraint is not merely respected, it is unexercised: there is no nomination
+// step to constrain.
 package seed
 
 import (
@@ -59,7 +60,7 @@ type Chunk struct {
 	Heading   string
 	SHA256    string
 
-	// Anchor is the L3 fingerprint ladder for this span, computed from the whole
+	// Anchor is the fingerprint ladder for this span, computed from the whole
 	// file (so tier 1 is the heading path, not the line number). It is what makes
 	// a re-seeded or externally changed file expire the right claims and leave
 	// formatting-only changes alone.
@@ -227,7 +228,7 @@ func ChunkFile(path string, relTo string) ([]Chunk, error) {
 		chunks[i].Ordinal = i
 	}
 
-	// Compute each chunk's L3 anchor from the whole file. Tier 1 is the heading
+	// Compute each chunk's anchor from the whole file. Tier 1 is the heading
 	// path enclosing the chunk's first line, which is why this needs the full
 	// file and not just the chunk. Tier 4 is the chunk's own content hash.
 	fullText := strings.Join(lines, "\n")

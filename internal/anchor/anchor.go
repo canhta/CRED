@@ -1,7 +1,7 @@
-// Package anchor implements L3's fingerprint ladder: the semantic anchor that
+// Package anchor implements the fingerprint ladder: the semantic anchor that
 // decides whether a claim's evidence still holds after its source file changes.
 //
-// The ladder has four tiers (PRD section 4, L3):
+// The ladder has four tiers:
 //
 //	tier 1  symbol path            survives line moves, reformatting, insertions above
 //	tier 2  normalized node hash   survives formatting and headers
@@ -35,8 +35,8 @@ import (
 //
 // SymbolPath and NodeHash are the only two tiers the law consults. WindowHash
 // and ByteHash are retained for diagnostics and for a future tier-3 fallback —
-// they never decide validity, because deciding on them is the failure L3 exists
-// to prevent.
+// they never decide validity, because deciding on them is the failure this
+// ladder exists to prevent.
 type Anchor struct {
 	SymbolPath string // tier 1: heading path (text) or tree-sitter symbol path (code)
 	NodeHash   string // tier 2: sha256 of the enclosing node's normalized text
@@ -48,7 +48,7 @@ type Anchor struct {
 // zero SymbolPath or NodeHash means the ladder cannot be applied — a
 // pre-existing tier-4-only row, or an attestation whose evidence is a person
 // rather than a file span. Such evidence is never expired by re-anchoring,
-// because expiring on tier 4 alone is exactly the mistake L3 forbids.
+// because expiring on tier 4 alone is exactly the mistake the ladder forbids.
 func (a Anchor) Anchored() bool {
 	return a.SymbolPath != "" && a.NodeHash != ""
 }
@@ -85,7 +85,8 @@ const (
 	Ambiguous
 	// Unanchored: the stored anchor lacks tiers 1–2 (a pre-existing tier-4-only
 	// row, or an attestation). The ladder does not apply; the claim is left
-	// untouched. Never an expiry — expiring on tier 4 alone is the L3 failure.
+	// untouched. Never an expiry — expiring on tier 4 alone is the failure the
+	// ladder exists to prevent.
 	Unanchored
 )
 
@@ -111,9 +112,9 @@ func (k VerdictKind) Expires() bool {
 	return k == SemanticChange || k == Ambiguous
 }
 
-// Verdict is a resolution outcome with a human-legible reason. L3's whole value
-// is that the reason a claim survived or expired is a diff, not a score, so the
-// reason is carried, not just the kind.
+// Verdict is a resolution outcome with a human-legible reason. The ladder's whole
+// value is that the reason a claim survived or expired is a diff, not a score, so
+// the reason is carried, not just the kind.
 type Verdict struct {
 	Kind   VerdictKind
 	Reason string
@@ -137,8 +138,8 @@ type located struct {
 	nodeHash string // tier 2 of the relocated node, valid when status == found
 }
 
-// classify is L3's law, stated once as a pure function of the stored anchor and
-// the relocation result. Every Anchorer relocates by its own mechanics
+// classify is the ladder's law, stated once as a pure function of the stored
+// anchor and the relocation result. Every Anchorer relocates by its own mechanics
 // (headings for text, symbol paths for code) and then defers the *decision* to
 // this function, so the law has exactly one implementation.
 //
@@ -167,26 +168,26 @@ func classify(stored Anchor, loc located) Verdict {
 // Anchorer computes an anchor for a span at ingest and resolves a stored anchor
 // against a current source at re-anchor time. Text and code are different
 // mechanics behind one interface, so the code anchorer (pure-Go tree-sitter,
-// per the semantic-anchoring spike) is a drop-in that never touches this file.
+// CGO-free) is a drop-in that never touches this file.
 type Anchorer interface {
 	// Kind reports the source kind this anchorer handles.
 	Kind() claim.SourceKind
 	// Compute builds the ladder for span within src. It reads the whole file so
 	// tier 1 is structural.
 	Compute(src Source, span Span) Anchor
-	// Resolve applies L3's law: locate the stored anchor's tier-1 path in the
-	// current src, then decide. It is the deterministic invalidation check.
+	// Resolve applies the ladder's law: locate the stored anchor's tier-1 path in
+	// the current src, then decide. It is the deterministic invalidation check.
 	Resolve(stored Anchor, src Source) Verdict
 }
 
-// For selects the anchorer for a source kind. It is the pluggable seam L3's
-// ladder hangs on: the code anchorer (pure-Go tree-sitter, verified CGO-free by
-// the semantic-anchoring spike) drops in at SourceCode without any caller
-// changing. It does not ship in this slice — not because it needs CGO, which the
-// spike disproved, but because no code evidence is produced yet and adopting a
-// v0.x single-maintainer parser as the anchoring authority needs a grammar-
-// fidelity verification first, the same discipline D-008 applied to the
-// tokenizer. Until then code falls back to the text anchorer, which finds no
+// For selects the anchorer for a source kind. It is the pluggable seam the
+// ladder hangs on: the code anchorer (pure-Go tree-sitter, CGO-free) drops in at
+// SourceCode without any caller changing. It does not ship in this slice — not
+// because it needs CGO (it does not), but because no code evidence is produced
+// yet and adopting a v0.x single-maintainer parser as the anchoring authority
+// needs a grammar-fidelity verification first, the same discipline applied to
+// the tokenizer before it was trusted. Until then code falls back to the text
+// anchorer, which finds no
 // heading path in Go and so records code evidence as tier-4-only rather than
 // pretending to a symbol path it cannot produce.
 //

@@ -93,8 +93,8 @@ func CurrentAt(claims []claim.Claim, validAt, txAt time.Time) []claim.Claim {
 }
 
 // NoValidTimeOverlap reports whether a set of intervals is pairwise
-// non-overlapping. Invariant 2: within one transaction slice, per kind, at
-// most one claim may be valid at any instant.
+// non-overlapping. Within one transaction slice, per kind, at most one claim
+// may be valid at any instant.
 func NoValidTimeOverlap(intervals []claim.Interval) bool {
 	for i := range intervals {
 		for j := i + 1; j < len(intervals); j++ {

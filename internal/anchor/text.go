@@ -12,10 +12,10 @@ import (
 const windowRadius = 3
 
 // TextAnchorer is the ladder for Markdown and plain-text evidence, which is the
-// entire corpus today (D-016 seeds documentation). Tier 1 is the Markdown
-// heading path — e.g. "D-010 > Reasoning" — which survives line moves and edits
-// elsewhere in the file. Tier 2 is the normalized hash of the enclosing
-// section, which survives reflow and reformatting.
+// entire corpus today because seeding ingests documentation, not code. Tier 1 is
+// the Markdown heading path — e.g. "D-010 > Reasoning" — which survives line
+// moves and edits elsewhere in the file. Tier 2 is the normalized hash of the
+// enclosing section, which survives reflow and reformatting.
 //
 // It handles both SourceDocument and code-as-text: a code file with no
 // tree-sitter anchorer available falls back here and gets tiers 3–4 only (no
@@ -136,10 +136,10 @@ func (TextAnchorer) Compute(src Source, span Span) Anchor {
 	return a
 }
 
-// Resolve applies L3's law. It relocates the stored tier-1 heading path in the
-// current source, then defers the decision to classify — the one place the law
-// lives. Tier 4 is never consulted: a section whose heading path and normalized
-// text both match is valid no matter how its bytes were reformatted.
+// Resolve applies the ladder's law. It relocates the stored tier-1 heading path
+// in the current source, then defers the decision to classify — the one place
+// the law lives. Tier 4 is never consulted: a section whose heading path and
+// normalized text both match is valid no matter how its bytes were reformatted.
 func (TextAnchorer) Resolve(stored Anchor, src Source) Verdict {
 	if !stored.Anchored() {
 		return classify(stored, located{})

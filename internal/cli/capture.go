@@ -14,7 +14,7 @@ import (
 // runCapture is the automatic write path's entry point — the command an agent
 // hook calls. It captures material (a tool result, a transcript slice, a file
 // span) and enqueues a nomination job, then returns immediately. Extraction
-// happens off the turn in `cred curate`, so the agent is never blocked (D-017).
+// happens off the turn in `cred curate`, so the agent is never blocked.
 //
 // It reads the material from --text or, if absent, from stdin, so a hook can
 // pipe a tool result straight in.

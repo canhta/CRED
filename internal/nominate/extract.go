@@ -14,7 +14,7 @@ import (
 //
 // Wall is the wall-clock of the single Generate call, measured by the Extractor
 // around the boundary — the provider does not report it. It is the third cost
-// dimension the PRD names (inference calls, tokens, wall-clock).
+// dimension tracked, alongside inference calls and tokens.
 type Usage struct {
 	InputTokens  int
 	OutputTokens int
@@ -25,12 +25,12 @@ type Usage struct {
 // Anthropic names it "max_tokens"; OpenAI names it "length". Either way, under
 // constrained decoding a truncated response is a *valid JSON prefix* that
 // parses cleanly and is silently wrong, so a response that stops for this
-// reason is discarded rather than parsed (L2).
+// reason is discarded rather than parsed.
 const StopLength = "max_tokens"
 
 // Model is the raw LLM call: a prompt and a JSON schema in, raw bytes and a stop
 // reason out. It performs no validation, because that is exactly what no
-// provider does reliably server-side and what L2 requires be done locally.
+// provider does reliably server-side, and validation must be done locally in code.
 //
 // This is the whole surface the LLM boundary needs. Swapping Anthropic for
 // another provider is a new Model, not a change to the extractor.
@@ -43,10 +43,10 @@ type Model interface {
 // nil sink is fine.
 //
 // Record is handed the Input as well as the Usage so the sink can attribute cost
-// to the principal and scope that occasioned the call — the per-principal,
-// per-scope attribution PRD section 8 requires. nominate still may not reach the
-// store (depguard forbids it, L2): the sink is an interface implemented on the
-// other side of the boundary and passed in.
+// to the principal and scope that occasioned the call — per-principal,
+// per-scope attribution. nominate still may not reach the store — depguard
+// forbids it — so the sink is an interface implemented on the other side of the
+// boundary and passed in.
 type UsageSink interface {
 	Record(ctx context.Context, in Input, u Usage)
 }

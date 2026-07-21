@@ -61,10 +61,10 @@ func TestDiscoverIsStable(t *testing.T) {
 	}
 }
 
-// TestSeedsFromDocumentationNotHistory pins D-016 structurally. The seeder has
-// no notion of a commit, and this asserts the target list stays that way: a
-// claim whose evidence is immutable can never expire, which is the inverse of
-// what CRED is for.
+// TestSeedsFromDocumentationNotHistory pins the documentation-not-history rule
+// structurally. The seeder has no notion of a commit, and this asserts the
+// target list stays that way: a claim whose evidence is immutable can never
+// expire, which is the inverse of what CRED is for.
 func TestSeedsFromDocumentationNotHistory(t *testing.T) {
 	for _, f := range seed.TargetFiles {
 		require.NotContains(t, strings.ToLower(f), "git")

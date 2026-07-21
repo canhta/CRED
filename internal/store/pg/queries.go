@@ -80,7 +80,7 @@ type SeedRecord struct {
 }
 
 // InsertSeed writes one new chunk in a single transaction: evidence, claim, the
-// L1 link, both ACLs, and the embedding.
+// claim-evidence link, both ACLs, and the embedding.
 //
 // One transaction because a claim that commits without its evidence is an
 // orphan claim, and an embedding that commits without its claim is a row reads

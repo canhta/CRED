@@ -3,7 +3,7 @@
 //
 // The store returns rows, never decisions. There is no GetVisibleClaims(principal)
 // here and there never will be: no exported function in this package takes a
-// principal, because L5's intersection is computed in Go by internal/acl. That
+// principal, because the intersection is computed in Go by internal/acl. That
 // costs a round trip of rows Postgres could have discarded, and it buys the
 // only version of access control that can be unit-tested.
 //

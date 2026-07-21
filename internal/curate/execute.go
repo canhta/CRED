@@ -2,10 +2,10 @@
 // workers that run it off the turn.
 //
 // It is the other half of the LLM boundary. internal/nominate proposes;
-// internal/curate decides and writes (L2). Everything a model produced is
+// internal/curate decides and writes. Everything a model produced is
 // untrusted until it reaches here: the executor resolves each candidate's quote
-// against the trusted source, drops any it cannot find (L1), and stores the
-// resolved span — never the model's free text — as evidence (L8).
+// against the trusted source, drops any it cannot find, and stores the
+// resolved span — never the model's free text — as evidence.
 //
 // This package imports the store; internal/nominate may not. That asymmetry is
 // the structural form of "the model nominates, code decides".
@@ -52,8 +52,8 @@ func NewExecutor(store WriteStore, embed Embedder, log *slog.Logger) *Executor {
 	return &Executor{store: store, embed: embed, log: log}
 }
 
-// WriteResult reports what a nomination write did. DroppedNoEvidence is the L1
-// count: candidates whose quote did not resolve against the source. It must be
+// WriteResult reports what a nomination write did. DroppedNoEvidence counts
+// candidates whose quote did not resolve against the source. It must be
 // visible, because a silently dropped candidate and a silently stored one are
 // the two failures the whole boundary exists to prevent.
 type WriteResult struct {
@@ -62,12 +62,11 @@ type WriteResult struct {
 }
 
 // WriteCandidates writes the candidates that resolve against in.Source. A
-// candidate whose quote is not a verbatim span of the source is dropped (L1):
+// candidate whose quote is not a verbatim span of the source is dropped:
 // the model pointed at evidence that does not exist, so there is no claim.
 //
 // The evidence stored is the resolved span from the source, not the model's
-// text. Statements are the model's; evidence is the source's. That division is
-// the L8 guarantee.
+// text. Statements are the model's; evidence is the source's.
 func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands []nominate.Candidate) (WriteResult, error) {
 	modelID, err := e.presentModel(ctx)
 	if err != nil {
@@ -78,8 +77,8 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 	for _, c := range cands {
 		span, ok := locate(in.Source, c.Quote, in.BaseLine)
 		if !ok {
-			// L1: no resolvable evidence, no claim. Never log the quote or the
-			// statement — ingested content is untrusted (L8).
+			// No resolvable evidence, no claim. Never log the quote or the
+			// statement — ingested content is untrusted.
 			res.DroppedNoEvidence++
 			e.debug("dropped candidate with unresolvable evidence",
 				slog.String("path", in.Path), slog.String("trigger", in.Trigger))
@@ -87,7 +86,7 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 		}
 
 		now := time.Now().UTC()
-		// Compute the L3 anchor from the whole trusted source (in.Source), so tier
+		// Compute the anchor from the whole trusted source (in.Source), so tier
 		// 1 is structural rather than a line number. The span's content hash is
 		// tier 4. Attestations take no source and skip this (ok == false).
 		var anc anchor.Anchor
@@ -112,7 +111,7 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 			confidence:    c.Confidence,
 			model:         nominate.PromptVersion, // the boundary that produced it
 			principals:    in.Principals,
-			contributedBy: firstPrincipal(in.Principals), // the quota's counter (PRD 8)
+			contributedBy: firstPrincipal(in.Principals), // the quota's counter
 			now:           now,
 		})
 		if err != nil {
@@ -125,7 +124,7 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 
 // Attest writes a human attestation — the explicit write path, used by `cred
 // remember` and the MCP remember tool. It is deterministic and takes no model:
-// L1 counts human attestation as evidence, so the statement is its own evidence
+// a human attestation is itself evidence, so the statement is its own evidence
 // and the principal is the attester. Because it never calls an LLM, the explicit
 // write path needs no API key — the same zero-config property the read path has.
 //
@@ -162,7 +161,7 @@ func (e *Executor) Attest(ctx context.Context, statement, kind string, principal
 		model:         "attestation",
 		attestedBy:    principal,
 		principals:    []claim.PrincipalID{principal},
-		contributedBy: principal, // an attestation counts toward the attester's quota (PRD 8)
+		contributedBy: principal, // an attestation counts toward the attester's quota
 		now:           now,
 	})
 }

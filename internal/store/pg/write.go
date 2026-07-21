@@ -23,22 +23,23 @@ type WriteRecord struct {
 	StatementSHA256 string // hex of the normalized statement hash
 	Principals      []claim.PrincipalID
 
-	// ContributedBy is the principal the contribution quota counts against
-	// (PRD 8). Empty is allowed and means "not counted" — that is how the
+	// ContributedBy is the principal the contribution quota counts against.
+	// Empty is allowed and means "not counted" — that is how the
 	// deterministic seed path stays exempt. It is set in the same transaction as
 	// the claim, so the quota counts exactly what committed and cannot drift from
 	// a separate ledger write.
 	ContributedBy claim.PrincipalID
 }
 
-// WriteClaim writes one claim in a single transaction: evidence, claim, the L1
-// link, both ACLs, and the embedding.
+// WriteClaim writes one claim in a single transaction: evidence, claim, the
+// claim-evidence link, both ACLs, and the embedding.
 //
 // One transaction, for the same reason InsertSeed is: a claim that commits
-// without its evidence is an orphan (L1 violated through a crash rather than a
-// bug), and an embedding without its claim is a row reads filter out forever.
+// without its evidence is an orphan (that no-orphan invariant broken through a
+// crash rather than a bug), and an embedding without its claim is a row reads
+// filter out forever.
 //
-// This is where "code decides" lands (L2). The nominator proposed a candidate;
+// This is where "code decides" lands. The nominator proposed a candidate;
 // by the time control reaches here the candidate has been validated and its
 // evidence resolved against the trusted source. Nothing the model returned is
 // trusted past this point — the evidence text stored is the span from the
@@ -108,10 +109,10 @@ func (s *Store) WriteClaim(ctx context.Context, modelID int, r WriteRecord) (cla
 		r.Claim.Recorded.From, r.Claim.Confidence, statementSum,
 		// source_commit stays empty: a written claim's evidence is a live span
 		// or an attestation, both of which can change — that mutability is the
-		// point (D-016), and an immutable commit hash would defeat it.
+		// point, and an immutable commit hash would defeat it.
 		r.Claim.SourceRepo, "", r.Claim.ExtractedByModel, r.Claim.PromptVersion,
 		// contributed_by is the quota's counter, written in the same transaction
-		// as the claim so it commits atomically with it (PRD 8).
+		// as the claim so it commits atomically with it.
 		string(r.ContributedBy),
 	).Scan(&claimID)
 	if err != nil {
@@ -158,7 +159,7 @@ type DupMember struct {
 //
 // The store returns the groups; internal/curate decides which member survives
 // and internal/temporal closes the losers' intervals. The decision is not made
-// in SQL, for the same reason L5 is not: a deterministic reconciler that runs
+// in SQL, for the same reason the ACL intersection is not: a deterministic reconciler that runs
 // in Go can be unit-tested and produces byte-identical output across runs.
 func (s *Store) LiveDuplicateGroups(ctx context.Context) ([][]DupMember, error) {
 	rows, err := s.pool.Query(ctx, `
@@ -236,7 +237,7 @@ func (s *Store) ApplySupersession(ctx context.Context, c claim.Claim, reason str
 // under a retried job or a concurrent pass.
 //
 // reason must be one the schema permits ('forgotten' for a human reversal,
-// 'stale_anchor' for an L3 re-anchoring failure). The caller decides the reason;
+// 'stale_anchor' for a re-anchoring failure). The caller decides the reason;
 // the store only persists the close.
 func (s *Store) ExpireClaim(ctx context.Context, id, reason string, now time.Time) error {
 	tag, err := s.pool.Exec(ctx, `
@@ -252,7 +253,7 @@ func (s *Store) ExpireClaim(ctx context.Context, id, reason string, now time.Tim
 	return nil
 }
 
-// ForgetClaim expires a claim at now as a human reversal (D-016). It is
+// ForgetClaim expires a claim at now as a human reversal. It is
 // ExpireClaim with the 'forgotten' reason, kept as a named method because that
 // is the operation `cred forget` performs.
 func (s *Store) ForgetClaim(ctx context.Context, id string, now time.Time) error {
@@ -261,7 +262,7 @@ func (s *Store) ForgetClaim(ctx context.Context, id string, now time.Time) error
 
 // SupersedeReasonStaleAnchor is written when a claim is expired because its
 // evidence failed re-anchoring: tier 1 or 2 disagreed with the current source,
-// or the anchor resolved ambiguously (L3). It is expiry with no successor.
+// or the anchor resolved ambiguously. It is expiry with no successor.
 const SupersedeReasonStaleAnchor = "stale_anchor"
 
 // AnchoredEvidence is one live, anchored evidence row and the live claim resting
@@ -284,7 +285,7 @@ type AnchoredEvidence struct {
 // the re-anchoring check can resolve each row against the current file. It
 // returns rows, not decisions: internal/anchor decides each verdict and
 // internal/curate applies the expiry — the store neither resolves nor expires
-// here, for the same reason L5 is decided in Go. Tier-4-only rows (empty symbol
+// here, for the same reason the ACL intersection is decided in Go. Tier-4-only rows (empty symbol
 // path) are excluded; re-anchoring never touches them.
 func (s *Store) LiveAnchoredEvidence(ctx context.Context, repo string) ([]AnchoredEvidence, error) {
 	rows, err := s.pool.Query(ctx, `

@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// L8: recall output is fenced as data, never interpolated into a prompt.
+// Recall output is fenced as data, never interpolated into a prompt.
 // These tests take no database and no server.
 
 func TestFenceCarriesTheDataWarningBeforeAnyContent(t *testing.T) {

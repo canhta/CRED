@@ -86,7 +86,7 @@ type Result struct {
 	AsOf             time.Time
 	StalenessSeconds float64
 
-	// Candidates is what fusion saw; Authorized is what survived L5;
+	// Candidates is what fusion saw; Authorized is what survived access control;
 	// OmittedForBudget is what the ceiling dropped. Truncation is reported
 	// explicitly, because a silent truncation is a lie.
 	Candidates       int
@@ -111,10 +111,10 @@ type Meter interface {
 	RecordRecall(ctx context.Context, principal claim.PrincipalID, wallMS int64, packageClaims int, now time.Time) error
 }
 
-// BudgetError is a recall denied by the per-principal recall budget (PRD 8).
+// BudgetError is a recall denied by the per-principal recall budget.
 // Recall is on the turn, so a denial is a loud, synchronous error — the read
 // path's equivalent of the write path's recorded 'denied' event. It carries the
-// machine reason and no content, so it is safe to surface to the caller (L8).
+// machine reason and no content, so it is safe to surface to the caller.
 type BudgetError struct {
 	Reason limit.Reason
 }
@@ -153,7 +153,7 @@ func New(store Store, embedder Embedder, tokens TokenCounter) *Service {
 	return &Service{store: store, embed: embedder, tokens: tokens}
 }
 
-// WithLimits turns on the recall budget (PRD 8): the per-principal rate, the
+// WithLimits turns on the recall budget: the per-principal rate, the
 // server-side package cap, and per-recall cost attribution. It returns the
 // Service for chaining.
 func (s *Service) WithLimits(cfg limit.Config, m Meter) *Service {
@@ -183,7 +183,7 @@ func (s *Service) Recall(ctx context.Context, req Request) (*Result, error) {
 		req.Budget = DefaultTokenBudget
 	}
 
-	// Recall budget (PRD 8). The rate check is before any work, so a recall loop
+	// Recall budget. The rate check is before any work, so a recall loop
 	// is denied cheaply and cannot itself become the tail-latency load it exists
 	// to prevent. The package cap is applied server-side regardless of what the
 	// client asked, so no caller can raise its own assembled-package ceiling.
@@ -253,7 +253,7 @@ func (s *Service) Recall(ctx context.Context, req Request) (*Result, error) {
 	}
 	timings.Load = time.Since(t)
 
-	// L5, in Go, on loaded rows. Never a SQL predicate.
+	// ACL intersection, in Go, on loaded rows. Never a SQL predicate.
 	authorized := acl.Filter(claims, req.Principal, req.Now)
 
 	byID := make(map[string]claim.Claim, len(authorized))
@@ -298,7 +298,7 @@ func (s *Service) Recall(ctx context.Context, req Request) (*Result, error) {
 	res.StalenessSeconds = stalest(res.Claims, req.Now)
 	res.Timings.Total = time.Since(started)
 
-	// Cost attribution for the read path (PRD 8): wall-clock and package size,
+	// Cost attribution for the read path: wall-clock and package size,
 	// per principal. Best-effort — a successful recall must not fail because a
 	// telemetry append did, and the recall already returned its result to the
 	// caller in every meaningful sense.

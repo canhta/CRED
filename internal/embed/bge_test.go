@@ -8,14 +8,12 @@ import (
 )
 
 // referenceVector is the first five components of the CLS-pooled, L2-normalized
-// embedding of referenceText, as recorded in
-// docs/research/spikes/go-embeddings-tokenizer.md where the same model was run
-// under onnx-gomlx and cross-checked against ONNX Runtime at cosine 1.00000000.
+// embedding of referenceText, from a validation run that executed the same model
+// under onnx-gomlx and cross-checked it against ONNX Runtime at cosine 1.00000000.
 //
-// Pinning it here turns that spike result into a regression test: a change to
-// the tokenizer, the pooling, or the normalization moves these numbers, and a
-// silent move is exactly the failure shape this model choice was validated
-// against.
+// Pinning it here turns that result into a regression test: a change to the
+// tokenizer, the pooling, or the normalization moves these numbers, and a silent
+// move is exactly the failure shape this model choice was validated against.
 var (
 	referenceText   = "The quick brown fox jumps over the lazy dog."
 	referenceVector = []float32{
@@ -23,7 +21,7 @@ var (
 	}
 )
 
-// tolerance is float32 rounding. The spike measured a maximum per-element
+// tolerance is float32 rounding. A validation run measured a maximum per-element
 // deviation of 1.4e-7 between this backend and ONNX Runtime.
 const tolerance = 1e-6
 

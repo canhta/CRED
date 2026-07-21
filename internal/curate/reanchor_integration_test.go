@@ -37,10 +37,10 @@ func claimStatus(t *testing.T, st *pg.Store, marker string) (superseded bool, re
 	return at != nil, reason
 }
 
-// TestReanchorExpiresSemanticChangeNotFormatting is the L3 vertical: seed a doc,
+// TestReanchorExpiresSemanticChangeNotFormatting is the anchor-ladder vertical: seed a doc,
 // change one section's formatting only and another section's words, re-anchor,
 // and verify exactly the semantically-changed claim expired while the
-// formatting-only one survived. This is PRD acceptance criterion 4 end to end.
+// formatting-only one survived, end to end.
 func TestReanchorExpiresSemanticChangeNotFormatting(t *testing.T) {
 	st := openStore(t)
 	emb := newEmbedder(t)
@@ -103,13 +103,13 @@ The beta section states that retries use exponential backoff capped at thirty se
 	// Alpha: formatting churn — tiers 1 and 2 held — must NOT expire.
 	alphaSuperseded, _ := claimStatus(t, st, alpha)
 	require.False(t, alphaSuperseded,
-		"a pure-formatting change must expire zero claims (L3, acceptance criterion 4)")
+		"a pure-formatting change must expire zero claims")
 
 	// Beta: a real edit — tier 2 changed — must expire with the stale-anchor reason.
 	betaSuperseded, betaReason := claimStatus(t, st, beta)
 	require.True(t, betaSuperseded, "a semantic change must expire the claim")
 	require.Equal(t, pg.SupersedeReasonStaleAnchor, betaReason,
-		"the expiry reason distinguishes an L3 invalidation from a dedup or a forget")
+		"the expiry reason distinguishes a stale-anchor invalidation from a dedup or a forget")
 
 	require.Equal(t, 1, rrep.Expired, "exactly the beta claim expired")
 	require.Positive(t, rrep.Valid, "the alpha claim (and the title chunk) survived")

@@ -13,12 +13,12 @@ import (
 	"github.com/canhta/cred/internal/limit"
 )
 
-// runUsage shows the section-8 usage state: the principal's remaining headroom
-// on each limit before it is hit, and the per-scope cost that answers "which
-// teams actually use this". The numbers come from the same store counts and the
-// same internal/limit policy the enforcement path uses, so what a user sees here
-// is exactly what the worker and recall paths decide over — quota state visible
-// before it is hit (PRD 8), not a separate estimate that could disagree.
+// runUsage shows the usage state: the principal's remaining headroom on each
+// limit before it is hit, and the per-scope cost that answers "which teams
+// actually use this". The numbers come from the same store counts and the same
+// internal/limit policy the enforcement path uses, so what a user sees here is
+// exactly what the worker and recall paths decide over — quota state visible
+// before it is hit, not a separate estimate that could disagree.
 func runUsage(ctx context.Context, args []string, cfg config.Config, out io.Writer) error {
 	fs := flag.NewFlagSet("usage", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -77,7 +77,7 @@ func runUsage(ctx context.Context, args []string, cfg config.Config, out io.Writ
 
 	// Denials already recorded in the contribution window — the on-the-record
 	// half of "never a silent drop". A non-zero count here is a write the quota
-	// or cost ceiling refused off the turn (D-017).
+	// or cost ceiling refused off the turn.
 	denied, err := st.DeniedInWindow(ctx, principal, limit.WindowStart(now, lc.ContributionWindow))
 	if err != nil {
 		return fmt.Errorf("usage: %w", err)

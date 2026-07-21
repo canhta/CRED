@@ -1,5 +1,5 @@
 // Package limit is CRED's usage-and-limits policy, as pure functions over
-// counters and configuration (PRD section 8).
+// counters and configuration.
 //
 // Every limit here is a security control first and a capacity concern second.
 // Shared memory with unbounded per-principal write access is a poisoning
@@ -21,7 +21,7 @@ import (
 
 // Reason names why an operation was denied. It is machine-stable — the CLI, the
 // logs, and the usage ledger all key on it — and carries no content, so it is
-// safe to export through telemetry and surface to a caller (L8).
+// safe to export through telemetry and surface to a caller.
 type Reason string
 
 const (
@@ -68,7 +68,7 @@ type Config struct {
 // dedup below it. They are overridable through CRED_* configuration.
 func Defaults() Config {
 	return Config{
-		// Automatic write fires at every third turn (D-017). A busy hour of real
+		// Automatic write fires at every third turn. A busy hour of real
 		// work is a few dozen accepted claims; 120/hour leaves headroom while
 		// still capping a repetition loop to one window's worth.
 		ContributionQuota:  120,
@@ -96,7 +96,7 @@ func Defaults() Config {
 
 // Decision is the outcome of a limit check. Remaining is how many more
 // operations the principal may perform before the control binds; it is what
-// makes quota state visible before it is hit (PRD 8). Remaining is -1 when the
+// makes quota state visible before it is hit. Remaining is -1 when the
 // control is disabled (unlimited).
 type Decision struct {
 	Allowed   bool

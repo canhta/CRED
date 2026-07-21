@@ -10,13 +10,12 @@ import (
 )
 
 // The Anthropic adapter is hand-rolled against the raw Messages API rather than
-// the official SDK, on purpose. go.md rule 9 prefers copying thirty lines over
+// the official SDK, on purpose. Copying thirty lines is preferred over taking on
 // a module, and the accepted dependency set does not include an LLM SDK; the
 // surface CRED needs is one POST with a JSON-schema output format and a stop
-// reason back. The worker-ops spike also warns that the Stainless SDKs ship
-// breaking changes in *minor* releases weekly — a standing tax a solo
-// maintainer should not take on for this little API. If a second provider is
-// ever added, it is a second Model, not a framework.
+// reason back. The Stainless SDKs also ship breaking changes in *minor* releases
+// weekly — a standing tax a solo maintainer should not take on for this little
+// API. If a second provider is ever added, it is a second Model, not a framework.
 //
 // Structured output uses output_config.format with a json_schema (the current
 // parameter; the older top-level output_format is deprecated). No provider

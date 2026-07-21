@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The three suites are the ones go-embeddings-tokenizer.md ran to close D-008.
-// They are reused rather than re-derived, and the fixtures are produced by
-// internal/gen/make_fixtures.py against the pinned reference release.
+// The three suites are the ones that validated the tokenizer to byte-identity
+// before it was adopted. They are reused rather than re-derived, and the fixtures
+// are produced by internal/gen/make_fixtures.py against the pinned reference release.
 //
 // A tokenizer that is nearly right is worthless: one wrong token ID produces a
 // different vector and recall degrades with no error. A textbook-correct
@@ -80,8 +80,8 @@ func TestConformanceCurated(t *testing.T)    { conform(t, "curated.jsonl.gz") }
 func TestConformanceFuzz(t *testing.T)       { conform(t, "fuzz.jsonl.gz") }
 func TestConformanceCodepoints(t *testing.T) { conform(t, "codepoints.jsonl.gz") }
 
-// TestSpecialTokensMatchBeforeNormalization pins defect 1 from the spike.
-// Normalizing first destroys the match and it cannot be recovered.
+// TestSpecialTokensMatchBeforeNormalization pins the special-token defect:
+// normalizing first destroys the match and it cannot be recovered.
 func TestSpecialTokensMatchBeforeNormalization(t *testing.T) {
 	tok, err := New()
 	require.NoError(t, err)

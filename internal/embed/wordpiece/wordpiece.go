@@ -7,8 +7,7 @@
 // properties disqualify them here — the goal is byte-identity with the
 // tokenizer that trained the model, not Unicode correctness. The two disagree
 // on hundreds of codepoints and every disagreement is invisible on English
-// text, which is the worst failure shape available. See D-008 and
-// docs/research/spikes/go-embeddings-tokenizer.md.
+// text, which is the worst failure shape available.
 //
 // The character-class tables live in tables_gen.go and are probed out of the
 // pinned reference release by internal/gen/probe_tables.py. Regenerate them;

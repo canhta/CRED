@@ -10,7 +10,7 @@ type span struct {
 	text      string
 }
 
-// locate resolves a candidate's quote against the trusted source (L1). It is a
+// locate resolves a candidate's quote against the trusted source. It is a
 // pure function so the evidence-resolution rule can be unit-tested without a
 // database or a model.
 //
@@ -42,7 +42,7 @@ func locate(source, quote string, baseLine int) (span, bool) {
 	}, true
 }
 
-// normalizeStatement produces the key for exact-hash deduplication (D-010).
+// normalizeStatement produces the key for exact-hash deduplication.
 // Two statements that differ only in case or whitespace hash to the same value
 // and are treated as duplicates; anything else is a distinct claim. Exact
 // hashing has a zero false-merge rate by construction, which is why v1 uses it

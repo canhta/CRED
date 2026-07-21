@@ -28,8 +28,7 @@ const SupersedeReasonDuplicate = "duplicate"
 
 // Canonical picks the survivor of a duplicate group deterministically: the
 // earliest-recorded claim, ties broken by id. It is pure so the reconciler is
-// byte-identical across runs (a v1 acceptance criterion) and unit-testable
-// without a database.
+// byte-identical across runs and unit-testable without a database.
 //
 // The earliest claim survives because it is the one whose evidence chain is
 // oldest and most likely already referenced; the later duplicates are the churn
@@ -61,9 +60,8 @@ func earlier(a, b pg.DupMember) bool {
 }
 
 // Reconciler runs the exact-hash deduplication pass. It is deterministic and
-// takes no model — dedup is a code decision, not a nomination (D-010's
-// zero-inference dedup). Contradiction reconciliation, which does need a
-// nomination, is not built yet; see the README.
+// takes no model — dedup is a code decision, not a nomination. Contradiction
+// reconciliation, which does need a nomination, is not built yet; see the README.
 type Reconciler struct {
 	store DedupStore
 	log   *slog.Logger

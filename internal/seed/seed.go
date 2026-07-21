@@ -168,7 +168,7 @@ func (s *Seeder) Run(ctx context.Context, root string, principals []claim.Princi
 			}
 			rep.Inserted++
 
-			// Never log chunk text. Ingested content is untrusted (L8) and
+			// Never log chunk text. Ingested content is untrusted and
 			// logs are read by tools that were not designed to treat it as
 			// such. Identifiers, counts and durations only.
 			s.log.Debug("seeded chunk",

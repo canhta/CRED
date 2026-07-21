@@ -41,8 +41,8 @@ func withEvidence(c claim.Claim, acls ...claim.ACL) claim.Claim {
 	return c
 }
 
-// TestPermittedIsIntersectionNeverUnion is L5's whole point. Union leaks
-// private content to readers of the public source.
+// TestPermittedIsIntersectionNeverUnion guards the whole point of this
+// package: union leaks private content to readers of the public source.
 func TestPermittedIsIntersectionNeverUnion(t *testing.T) {
 	c := withEvidence(
 		claim.Claim{ACL: grants(alice, bob, carol)},
@@ -68,8 +68,8 @@ func TestClaimACLCannotWidenBeyondEvidence(t *testing.T) {
 	require.Contains(t, got, alice)
 }
 
-// TestEmptyACLIsReachableByNobody — adversarial case 1. Treating an empty ACL
-// as public is the fail-open bug.
+// TestEmptyACLIsReachableByNobody — treating an empty ACL as public is the
+// fail-open bug.
 func TestEmptyACLIsReachableByNobody(t *testing.T) {
 	tests := []struct {
 		name string
@@ -87,8 +87,8 @@ func TestEmptyACLIsReachableByNobody(t *testing.T) {
 	}
 }
 
-// TestClaimWithoutEvidenceIsUnreachable — L1 enforced through the permission
-// channel. An orphan claim is not merely invalid, it is unreadable.
+// TestClaimWithoutEvidenceIsUnreachable — an orphan claim is not merely
+// invalid, it is unreadable, enforced through the permission channel.
 func TestClaimWithoutEvidenceIsUnreachable(t *testing.T) {
 	c := claim.Claim{ACL: grants(alice, bob)}
 	require.Empty(t, c.Evidence)
@@ -96,8 +96,8 @@ func TestClaimWithoutEvidenceIsUnreachable(t *testing.T) {
 	require.False(t, acl.CanRead(c, alice, now))
 }
 
-// TestExpiredGrantDeniesRatherThanErrors — adversarial case 5. An error would
-// be an existence oracle.
+// TestExpiredGrantDeniesRatherThanErrors — an error would be an existence
+// oracle.
 func TestExpiredGrantDeniesRatherThanErrors(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -140,9 +140,9 @@ func TestIntersectIsOrderIndependent(t *testing.T) {
 	require.Equal(t, forward, reverse)
 }
 
-// TestUnauthorizedIsIndistinguishableFromNonexistent — adversarial case 8, in
-// the form this package can assert: Filter drops rather than marks, so a
-// denied claim leaves no trace in the output for a caller to count.
+// TestUnauthorizedIsIndistinguishableFromNonexistent, in the form this package
+// can assert: Filter drops rather than marks, so a denied claim leaves no trace
+// in the output for a caller to count.
 func TestUnauthorizedIsIndistinguishableFromNonexistent(t *testing.T) {
 	visible := withEvidence(claim.Claim{ID: "v", ACL: grants(alice)}, grants(alice))
 	hidden := withEvidence(claim.Claim{ID: "h", ACL: grants(bob)}, grants(bob))

@@ -10,7 +10,7 @@ import (
 )
 
 // fakeStore records what the executor writes, without a database. It lets the
-// L1 and L2 write-side rules be tested as pure functions over the executor.
+// write-side rules be tested as pure functions over the executor.
 type fakeStore struct {
 	written []pg.WriteRecord
 }
@@ -36,7 +36,7 @@ func (fakeEmbed) Embed(_ context.Context, texts []string) ([][]float32, error) {
 func (fakeEmbed) ModelName() string { return "test-model" }
 
 func TestWriteCandidatesDropsEvidencelessCandidate(t *testing.T) {
-	// L1: a candidate whose quote is not a span of the trusted source has no
+	// A candidate whose quote is not a span of the trusted source has no
 	// evidence, so there is no claim. The one that resolves is written; the one
 	// that does not is dropped, and the drop is counted, never silent.
 	store := &fakeStore{}
@@ -64,7 +64,7 @@ func TestWriteCandidatesDropsEvidencelessCandidate(t *testing.T) {
 		t.Fatalf("wrote %d claims, want 1", len(res.Written))
 	}
 	if res.DroppedNoEvidence != 1 {
-		t.Fatalf("dropped %d, want 1 (L1)", res.DroppedNoEvidence)
+		t.Fatalf("dropped %d, want 1", res.DroppedNoEvidence)
 	}
 	if len(store.written) != 1 {
 		t.Fatalf("store received %d writes, want 1", len(store.written))
@@ -72,8 +72,7 @@ func TestWriteCandidatesDropsEvidencelessCandidate(t *testing.T) {
 
 	rec := store.written[0]
 	// The evidence stored is the resolved span from the SOURCE, not the model's
-	// free text — the L8 guarantee. Statement is the model's; evidence is the
-	// source's.
+	// free text. Statement is the model's; evidence is the source's.
 	if rec.Evidence.ExtractedText != "reciprocal rank fusion at k equal to sixty" {
 		t.Fatalf("evidence text = %q, want the source span", rec.Evidence.ExtractedText)
 	}
@@ -81,7 +80,7 @@ func TestWriteCandidatesDropsEvidencelessCandidate(t *testing.T) {
 		t.Fatalf("claim statement = %q, want the candidate statement", rec.Claim.Statement)
 	}
 	if rec.Claim.ExtractedByModel == "" {
-		t.Fatal("a written claim must record what produced it (provenance, L8)")
+		t.Fatal("a written claim must record what produced it (provenance)")
 	}
 	if rec.StatementSHA256 == "" {
 		t.Fatal("a written claim must carry its dedup hash")
@@ -89,7 +88,7 @@ func TestWriteCandidatesDropsEvidencelessCandidate(t *testing.T) {
 }
 
 func TestAttestWritesHumanEvidence(t *testing.T) {
-	// L1 counts human attestation as evidence: the statement is its own
+	// A human attestation is itself evidence: the statement is its own
 	// evidence, the principal is the attester, and no model is called — so the
 	// explicit path needs no key.
 	store := &fakeStore{}

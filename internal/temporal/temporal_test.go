@@ -14,8 +14,8 @@ import (
 // the boundary this package exists to hold has already been violated.
 //
 // Timestamps are drawn from a small pool so boundary collisions are common —
-// the generator technique testing-strategy.md rates above any single
-// invariant.
+// a generator technique that matters more than any single invariant it
+// exercises.
 var (
 	t0 = time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC)
 	t1 = t0.Add(1 * time.Hour)
@@ -165,8 +165,8 @@ func TestSupersedeRejectsSelfEdge(t *testing.T) {
 	require.ErrorIs(t, err, temporal.ErrNotWellFormed)
 }
 
-// TestSupersedeIsMonotoneInTransactionTime — invariant 5. Superseding twice at
-// the same instant, or backwards, must fail rather than produce a chain whose
+// TestSupersedeIsMonotoneInTransactionTime — superseding twice at the same
+// instant, or backwards, must fail rather than produce a chain whose
 // transaction times go the wrong way.
 func TestSupersedeIsMonotoneInTransactionTime(t *testing.T) {
 	incumbent := claim.Claim{ID: "old", Recorded: temporal.Forever(t1)}

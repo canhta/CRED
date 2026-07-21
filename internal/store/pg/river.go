@@ -11,7 +11,7 @@ import (
 	"github.com/riverqueue/river/rivermigrate"
 )
 
-// River is the first scheduled work in CRED (D-017). It lives here, in the one
+// River is the first scheduled work in CRED. It lives here, in the one
 // package permitted to import the driver, because the River client is typed on
 // pgx.Tx: constructing it anywhere else would drag the driver across the
 // boundary depguard exists to hold. internal/curate names none of these types —
@@ -35,7 +35,7 @@ func (s *Store) MigrateRiver(ctx context.Context) error {
 // RiverInsertClient returns an insert-only River client — no queues, no
 // workers, never started. It is what `cred capture` uses to enqueue an
 // automatic-nomination job and return immediately, so the agent's turn is never
-// blocked on extraction (D-017).
+// blocked on extraction.
 func (s *Store) RiverInsertClient() (*river.Client[pgx.Tx], error) {
 	c, err := river.NewClient(riverpgxv5.New(s.pool), &river.Config{})
 	if err != nil {
@@ -49,8 +49,8 @@ func (s *Store) RiverInsertClient() (*river.Client[pgx.Tx], error) {
 // the turn.
 //
 // MaxAttempts defaults to 25 in River, whose exponential schedule stretches to
-// roughly three weeks — meaningless for a nomination job. The worker-ops spike
-// sets it to 3–5; 5 here.
+// roughly three weeks — meaningless for a nomination job. A bounded 3–5 is the
+// useful range; 5 here.
 func (s *Store) RiverWorkerClient(workers *river.Workers, log *slog.Logger) (*river.Client[pgx.Tx], error) {
 	c, err := river.NewClient(riverpgxv5.New(s.pool), &river.Config{
 		Queues: map[string]river.QueueConfig{

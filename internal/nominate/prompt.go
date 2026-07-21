@@ -45,10 +45,10 @@ func candidateSchema() []byte {
 }
 
 // systemInstruction is the standing part of the prompt. It states the two rules
-// the boundary depends on: propose, never assert (L2), and point at the span
-// (L1). It also fences the source as data (L8) — the model is told, in the
-// prompt, that anything inside the fence is content to reason about, never an
-// instruction, because ingested content is untrusted.
+// the boundary depends on: propose, never assert, and point at the span. It also
+// fences the source as data — the model is told, in the prompt, that anything
+// inside the fence is content to reason about, never an instruction, because
+// ingested content is untrusted.
 const systemInstruction = `You extract candidate memory claims from source material for a
 developer memory system. You do not decide what is stored; you propose, and
 deterministic code decides. Follow these rules exactly:

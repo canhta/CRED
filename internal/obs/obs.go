@@ -36,7 +36,7 @@ const (
 	AttrEmbeddingModel = "cred.embedding.model_id"
 	AttrSchemaVersion  = "cred.schema.version"
 
-	// Usage and limits (PRD section 8). Scope and usage-kind are CRED's own
+	// Usage and limits. Scope and usage-kind are CRED's own
 	// namespace; token counts use the gen_ai.* semantic conventions, which is
 	// why those names live here — the conventions have no stable release and
 	// have already renamed fields, so a spec bump is a one-file diff.
@@ -61,8 +61,8 @@ const (
 	AttrSpanID  = "span_id"
 )
 
-// Never log claim or evidence body text. Ingested content is untrusted (L8)
-// and logs are read by tools that were not designed to treat it as such. There
+// Never log claim or evidence body text. Ingested content is untrusted and
+// logs are read by tools that were not designed to treat it as such. There
 // is deliberately no attribute constant for claim statement or evidence text:
 // the missing constant is the guard rail.
 

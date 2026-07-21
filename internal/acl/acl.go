@@ -1,11 +1,11 @@
-// Package acl implements L5 — access control evaluated at recall, failing
-// closed, as the intersection — as pure functions over domain types.
+// Package acl implements access control evaluated at recall, failing closed,
+// as the intersection — as pure functions over domain types.
 //
 // This package must not import a database driver, database/sql, or pgx, and no
 // function here may take a connection. depguard fails the build if that
 // changes.
 //
-// L5 is never a SQL predicate. That costs performance: rows cross the wire
+// Access control is never a SQL predicate. That costs performance: rows cross the wire
 // that Postgres could have discarded. It is affordable at one instance per
 // organization, and the alternative is the known silent-failure path —
 // pgvector filtering under ACL selectivity returns 4 results where 40 were
@@ -21,8 +21,7 @@ import (
 // Active returns the principals a grant set admits at now.
 //
 // Expiry denies. It does not error: an error is an existence oracle, and
-// unauthorized must be indistinguishable from nonexistent
-// (testing-strategy adversarial cases 5 and 8).
+// unauthorized must be indistinguishable from nonexistent.
 func Active(a claim.ACL, now time.Time) map[claim.PrincipalID]struct{} {
 	out := make(map[claim.PrincipalID]struct{}, len(a))
 	for _, g := range a {
@@ -41,7 +40,7 @@ func Active(a claim.ACL, now time.Time) map[claim.PrincipalID]struct{} {
 // keeping the survivor's ACL is the same bug wearing different clothes.
 //
 // Intersect of no sets is empty, not universal. A claim with no evidence is
-// unreachable rather than public, which is L1 enforced through the permission
+// unreachable rather than public, enforced here through the permission
 // channel.
 func Intersect(sets []claim.ACL, now time.Time) map[claim.PrincipalID]struct{} {
 	if len(sets) == 0 {
@@ -64,8 +63,8 @@ func Intersect(sets []claim.ACL, now time.Time) map[claim.PrincipalID]struct{} {
 //
 //	claim.acl ⊆ ⋂(evidence_i.acl)
 //
-// A claim carrying no evidence is readable by nobody. That is L1 and it fails
-// closed by construction rather than by a check that could be forgotten.
+// A claim carrying no evidence is readable by nobody. It fails closed by
+// construction rather than by a check that could be forgotten.
 func Permitted(c claim.Claim, now time.Time) map[claim.PrincipalID]struct{} {
 	if len(c.Evidence) == 0 {
 		return map[claim.PrincipalID]struct{}{}

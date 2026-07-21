@@ -70,7 +70,7 @@ type RecallOutput struct {
 }
 
 // Attestor writes a human-attested claim. It is the write half of the MCP
-// surface: an agent calling `remember` is asserting a claim, which L1 counts as
+// surface: an agent calling `remember` is asserting a claim, which counts as its own
 // evidence. It is deliberately narrow — the server holds no nominator and no
 // automatic-write path, so the tool cannot be tricked into extraction. The
 // automatic path runs off the turn, driven by a hook, not by this server.
@@ -156,7 +156,7 @@ func (s *Server) handleRemember(ctx context.Context, _ *mcp.CallToolRequest, in 
 		return nil, RememberOutput{}, fmt.Errorf("remember failed")
 	}
 
-	// Identifiers only — never the statement text (L8).
+	// Identifiers only — never the statement text.
 	s.log.Info("remembered",
 		slog.String(obs.AttrPrincipalID, string(s.principal)),
 		slog.String(obs.AttrClaimID, id))
@@ -187,8 +187,8 @@ func (s *Server) handleRecall(ctx context.Context, _ *mcp.CallToolRequest, in Re
 		Now:       time.Now().UTC(),
 	})
 	if err != nil {
-		// A recall-budget denial is surfaced in-band with its reason (PRD 8:
-		// exhaustion is a loud, explicit denial). The reason carries no claim
+		// A recall-budget denial is surfaced in-band with its reason:
+		// exhaustion is a loud, explicit denial. The reason carries no claim
 		// content — only the machine reason — so it is safe to return, unlike a
 		// raw error, which could echo restricted text.
 		if be, ok := recall.AsBudgetError(err); ok {

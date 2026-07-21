@@ -23,9 +23,8 @@ const DefaultDatabaseURL = "postgres://cred:cred@127.0.0.1:5433/cred?sslmode=dis
 
 // Config is the resolved configuration.
 type Config struct {
-	// DatabaseURL is the one datastore. L7: relational, vector and full-text
-	// all live here, and no second datastore may be added without removing
-	// another.
+	// DatabaseURL is the one datastore: relational, vector and full-text all
+	// live here, and no second datastore may be added without removing another.
 	DatabaseURL string
 
 	// ModelDir holds the ONNX model. Empty means the user cache directory.
@@ -48,7 +47,7 @@ type Config struct {
 	LogFormat string
 
 	// AutoCapture gates the automatic write path. It defaults to ON, matching
-	// the shipped Mem0 pattern (D-017): the trigger enqueues a nomination job,
+	// the shipped Mem0 pattern: the trigger enqueues a nomination job,
 	// which a worker extracts off the turn. Opt out with CRED_AUTO_CAPTURE=false.
 	// This gates only automatic *nomination*; explicit `remember` is unaffected,
 	// and reads never touch it.
@@ -71,7 +70,7 @@ type Config struct {
 	// https://api.openai.com/v1, http://localhost:11434/v1.
 	LLMBaseURL string
 
-	// Limits is the usage-and-limits policy (PRD 8). It ships with working
+	// Limits is the usage-and-limits policy. It ships with working
 	// defaults (limit.Defaults), so the four controls are on out of the box with
 	// no configuration — a limit that has to be configured to exist is off on
 	// first run. Each ceiling is overridable through a CRED_* variable; a
@@ -120,8 +119,8 @@ func Load() (Config, error) {
 	return c, nil
 }
 
-// applyLimitOverrides lets an operator retune any one section-8 ceiling without
-// a config file. Every one is optional; absent leaves the default in place.
+// applyLimitOverrides lets an operator retune any one ceiling without a config
+// file. Every one is optional; absent leaves the default in place.
 func applyLimitOverrides(l *limit.Config) error {
 	for _, o := range []struct {
 		key string

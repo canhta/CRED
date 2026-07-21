@@ -14,7 +14,7 @@ import (
 // NominateArgs is the automatic-write job: material a trigger captured, to be
 // extracted off the turn. It carries the source verbatim so the worker re-embeds
 // and re-extracts; nothing is precomputed on the turn, which is the whole point
-// of pushing it to a worker (D-017).
+// of pushing it to a worker.
 //
 // It carries no claim and no evidence — only the trusted source and its
 // context. The worker nominates from it and code decides what, if anything, is
@@ -44,7 +44,7 @@ type DedupArgs struct{}
 func (DedupArgs) Kind() string { return "cred.dedup" }
 
 // PruneArgs is the scope-growth bound's job: check one scope's live-claim count
-// and prune it back if it is over its ceiling (PRD 8). It carries the scope a
+// and prune it back if it is over its ceiling. It carries the scope a
 // write just landed in, because that is the only scope whose count changed.
 type PruneArgs struct {
 	ScopeKind  string `json:"scope_kind"`
@@ -91,10 +91,10 @@ type NominateWorker struct {
 func (w *NominateWorker) Work(ctx context.Context, job *river.Job[NominateArgs]) error {
 	in := job.Args.toInput()
 
-	// Contribution quota and cost ceiling, before an LLM call is made (PRD 8).
+	// Contribution quota and cost ceiling, before an LLM call is made.
 	// A denial here is loud and recorded (see Limiter.deny), never a silent drop
 	// — that loudness is what stops the off-the-turn write path from hiding a
-	// poisoning attempt (D-017, L8). It returns nil, not an error: the write was
+	// poisoning attempt. It returns nil, not an error: the write was
 	// correctly refused, and a retry would only re-deny.
 	if w.limits != nil {
 		if principal := firstPrincipal(in.Principals); principal != "" {
@@ -118,7 +118,7 @@ func (w *NominateWorker) Work(ctx context.Context, job *river.Job[NominateArgs])
 		return err
 	}
 
-	// Identifiers and counts only — never the source or the statements (L8).
+	// Identifiers and counts only — never the source or the statements.
 	if w.log != nil {
 		w.log.Info("nominated",
 			slog.String("trigger", in.Trigger),
@@ -168,7 +168,7 @@ func (w *PruneWorker) Work(ctx context.Context, job *river.Job[PruneArgs]) error
 }
 
 // Register builds the River worker registry for the curate process. limiter and
-// pruner may be nil — the write path then runs without the section 8 controls,
+// pruner may be nil — the write path then runs without the usage-limit controls,
 // which is what the read-only and no-key deployments want.
 func Register(nom nominate.Nominator, exec *Executor, rec *Reconciler,
 	pruner *Pruner, limiter *Limiter, queue Queue, log *slog.Logger,

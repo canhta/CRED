@@ -7,7 +7,7 @@ import (
 	"github.com/canhta/cred/internal/claim"
 )
 
-// This file is the storage half of PRD section 8. It stores and counts; it does
+// This file is the storage half of usage limits. It stores and counts; it does
 // not decide. Every "is this over the limit" and "how aggressively to prune"
 // question is answered by internal/limit (pure); the methods here return the
 // counters that package decides over, exactly as the store returns rows for
@@ -98,7 +98,7 @@ func (s *Store) RecallsInWindow(ctx context.Context, principal claim.PrincipalID
 // RecordRecall is the recall-path convenience over RecordUsage: it records a
 // completed recall's wall-clock and package size, attributed to the principal.
 // Recall spans scopes rather than belonging to one, so the scope is left empty —
-// the per-scope attribution the PRD asks for is on the write (inference) side.
+// per-scope attribution belongs on the write (inference) side.
 func (s *Store) RecordRecall(ctx context.Context, principal claim.PrincipalID, wallMS int64, packageClaims int, now time.Time) error {
 	return s.RecordUsage(ctx, UsageEvent{
 		Principal: principal, Kind: "recall",
@@ -109,7 +109,7 @@ func (s *Store) RecordRecall(ctx context.Context, principal claim.PrincipalID, w
 // DeniedInWindow counts a principal's denied contributions since the cutoff. A
 // non-zero count is the queryable, on-the-record half of "exhaustion is loud,
 // never a silent drop": even when the denial happened off the turn in a
-// background worker (D-017), it left a row here.
+// background worker, it left a row here.
 func (s *Store) DeniedInWindow(ctx context.Context, principal claim.PrincipalID, since time.Time) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, `

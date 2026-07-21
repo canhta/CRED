@@ -26,7 +26,7 @@ func TestCanonicalKeepsEarliest(t *testing.T) {
 
 func TestCanonicalBreaksTiesByID(t *testing.T) {
 	// Equal timestamps must resolve to a deterministic total order, or the
-	// reconciler is not byte-identical across runs (a v1 acceptance criterion).
+	// reconciler is not byte-identical across runs.
 	group := []pg.DupMember{member("z", 10), member("m", 10), member("a", 10)}
 	survivor, dups := Canonical(group)
 	if survivor != "a" {

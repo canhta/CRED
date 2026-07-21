@@ -148,7 +148,7 @@ func TestSeedThenRecall(t *testing.T) {
 	require.NotEmpty(t, res.Claims, "seeded content was not retrievable")
 
 	top := res.Claims[0]
-	require.NotEmpty(t, top.Claim.Evidence, "L1: a claim reached recall with no evidence")
+	require.NotEmpty(t, top.Claim.Evidence, "a claim reached recall with no evidence")
 	require.Contains(t, strings.ToLower(top.Claim.Evidence[0].ExtractedText), "rank fusion")
 	require.Positive(t, top.Claim.Evidence[0].LineStart)
 	require.GreaterOrEqual(t, top.Claim.Evidence[0].LineEnd, top.Claim.Evidence[0].LineStart)
@@ -245,7 +245,7 @@ func TestBothArmsContribute(t *testing.T) {
 	require.True(t, seen[recall.ArmLexical], "the lexical arm contributed nothing")
 }
 
-// TestUnauthorizedPrincipalSeesNothing — L5 fails closed. A principal with no
+// TestUnauthorizedPrincipalSeesNothing — access control fails closed. A principal with no
 // grant gets an empty result, not an error: an error is an existence oracle.
 func TestUnauthorizedPrincipalSeesNothing(t *testing.T) {
 	st := openTestStore(t)
@@ -272,7 +272,7 @@ func TestUnauthorizedPrincipalSeesNothing(t *testing.T) {
 	require.Equal(t, authorized.Candidates, stranger.Candidates)
 }
 
-// TestStoreReturnsRowsNotDecisions — L5 is computed in Go over what the store
+// TestStoreReturnsRowsNotDecisions — the ACL intersection is computed in Go over what the store
 // handed back. This asserts the store never applied it: the ACL rows come back
 // intact and internal/acl reaches the same verdict from them alone.
 func TestStoreReturnsRowsNotDecisions(t *testing.T) {
@@ -370,7 +370,7 @@ func testLogger(t *testing.T) *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// TestRecallBudgetDeniesAndRecords is the read-path half of section 8: an agent
+// TestRecallBudgetDeniesAndRecords is the read-path half of usage limits: an agent
 // calling recall in a loop is rate-limited per principal, protecting tail
 // latency, and the denial is loud — a synchronous, typed BudgetError, since
 // recall is on the turn (unlike the write path's recorded 'denied' event). Every

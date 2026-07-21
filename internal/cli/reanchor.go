@@ -11,7 +11,7 @@ import (
 	"github.com/canhta/cred/internal/curate"
 )
 
-// runReanchor re-resolves every live claim's L3 anchor against the current files
+// runReanchor re-resolves every live claim's anchor against the current files
 // under a root and expires the ones whose evidence no longer holds (semantic
 // change or ambiguous), leaving formatting-only changes untouched.
 //
@@ -20,8 +20,8 @@ import (
 // cannot observe without watching the filesystem, which is a dependency and a
 // footgun this project does not want. `cred reanchor <root>` is the deterministic
 // primitive a CI step or a post-edit git hook invokes, the same shape as `cred
-// seed`. It needs no API key and no model: invalidation is deterministic (L3),
-// so nothing here crosses the LLM boundary or embeds.
+// seed`. It needs no API key and no model: invalidation is deterministic, so
+// nothing here crosses the LLM boundary or embeds.
 func runReanchor(ctx context.Context, args []string, cfg config.Config, log *slog.Logger, out io.Writer) error {
 	fs := flag.NewFlagSet("reanchor", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)

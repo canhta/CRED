@@ -7,11 +7,10 @@ import (
 	"github.com/canhta/cred/internal/claim"
 )
 
-// Fake is a Nominator that needs no network and no API key. It carries roughly
-// 95% of the tests (per the worker-ops spike): the adversarial inputs that
-// matter for the write path — an unresolvable quote, an out-of-schema kind, a
-// truncated response — are constructible here and not recordable from a real
-// provider.
+// Fake is a Nominator that needs no network and no API key. It carries most of
+// the tests: the adversarial inputs that matter for the write path — an
+// unresolvable quote, an out-of-schema kind, a truncated response — are
+// constructible here and not recordable from a real provider.
 //
 // Its extraction is deterministic: one candidate per non-empty line of the
 // source, with the line as both the quote and the statement. That is enough to
@@ -26,8 +25,8 @@ type Fake struct {
 	// Kind is assigned to every candidate. Defaults to Reference.
 	Kind claim.Kind
 	// Return, if set, is returned verbatim, ignoring the source. It lets a test
-	// inject a candidate whose quote does not resolve (L1) or whose kind is out
-	// of schema (L2) without depending on the line-splitting heuristic.
+	// inject a candidate whose quote does not resolve or whose kind is out of
+	// schema without depending on the line-splitting heuristic.
 	Return []Candidate
 	// Err, if set, is returned as the nomination error.
 	Err error

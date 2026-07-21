@@ -16,8 +16,9 @@ import (
 // the Extractor gates truncation on a single canonical StopLength, and OpenAI
 // spells truncation "length" while Anthropic spells it "max_tokens". If the
 // adapter returned "length" verbatim, the gate would miss it and a truncated
-// (valid-prefix) response would parse and pass — the exact L2 hole. This test
-// pins that "length" is translated to StopLength.
+// (valid-prefix) response would parse and pass — exactly the hole local
+// validation exists to close. This test pins that "length" is translated to
+// StopLength.
 func TestOpenAINormalizesTruncationReason(t *testing.T) {
 	// The handler runs on another goroutine, so it records what it saw and the
 	// main goroutine asserts (testifylint's go-require rule, and the correct

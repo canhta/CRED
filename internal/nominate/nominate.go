@@ -1,19 +1,19 @@
 // Package nominate is the LLM boundary. It is the first place in CRED that
 // crosses to a model, and it is built so the model can only ever *propose*.
 //
-// L2 — the model nominates, code decides — is enforced here structurally, not
+// The model nominates and code decides, enforced here structurally rather than
 // by convention. A Nominator returns candidate claims and holds nothing that
 // can write, supersede, or expire: depguard forbids this package from importing
 // internal/store, so an extractor with a database handle would not compile. The
 // deterministic write executor lives in internal/curate, on the other side of
 // this boundary, and it is the only thing that turns a Candidate into a row.
 //
-// L1 — no claim without evidence — is enforced by the shape of a Candidate: it
-// carries a Quote, and the executor drops any candidate whose Quote is not a
-// span of the trusted Input.Source. The evidence stored is that resolved span,
-// taken from the source, never the free text the model returned. That is also
-// the L8 defense: even a model that fabricates a statement cannot fabricate the
-// evidence, because code reads the evidence out of the source itself.
+// A candidate cannot exist without evidence: it carries a Quote, and the
+// executor drops any candidate whose Quote is not a span of the trusted
+// Input.Source. The evidence stored is that resolved span, taken from the
+// source, never the free text the model returned. That also defends against a
+// model that fabricates a statement: it cannot fabricate the evidence, because
+// code reads the evidence out of the source itself.
 package nominate
 
 import (
@@ -24,14 +24,14 @@ import (
 	"github.com/canhta/cred/internal/claim"
 )
 
-// PromptVersion is recorded on every claim written from a nomination
-// (provenance, required by L8). Bump it whenever the prompt or schema changes,
-// so a later quality regression is traceable to the prompt that produced it.
+// PromptVersion is recorded on every claim written from a nomination, as
+// provenance. Bump it whenever the prompt or schema changes, so a later quality
+// regression is traceable to the prompt that produced it.
 const PromptVersion = "nominate/v1"
 
-// MaxStatementRunes bounds a candidate statement. The PRD keeps a claim's
-// statement short; a model that returns a paragraph is proposing something
-// other than a claim, and code declines it rather than storing it.
+// MaxStatementRunes bounds a candidate statement. A claim's statement is short
+// by design; a model that returns a paragraph is proposing something other than
+// a claim, and code declines it rather than storing it.
 const MaxStatementRunes = 300
 
 // Errors a Nominator may return. A nomination that produces no valid candidate
@@ -78,9 +78,9 @@ type Nominator interface {
 	Nominate(ctx context.Context, in Input) ([]Candidate, error)
 }
 
-// validKinds is the closed set from the PRD. A candidate proposing any other
-// kind is dropped, because kind determines validity semantics and an unknown
-// kind has none.
+// validKinds is the closed set of kinds. A candidate proposing any other kind
+// is dropped, because kind determines validity semantics and an unknown kind
+// has none.
 var validKinds = map[claim.Kind]struct{}{
 	claim.KindConvention:       {},
 	claim.KindDecision:         {},
@@ -91,14 +91,14 @@ var validKinds = map[claim.Kind]struct{}{
 }
 
 // Valid reports whether a candidate is well-formed enough for code to consider
-// writing it. This is the L2 local validation: no provider validates structured
-// output server-side, several silently drop schema constraints, and constrained
-// decoding guarantees a valid prefix rather than valid JSON — so every field is
-// checked here, in Go, where L2 says the decision belongs.
+// writing it. This is the local validation the boundary depends on: no provider
+// validates structured output server-side, several silently drop schema
+// constraints, and constrained decoding guarantees a valid prefix rather than
+// valid JSON — so every field is checked here, in Go, where the decision belongs.
 //
 // It deliberately does not check that Quote resolves against a source: that
 // needs the source, which lives with the executor. Valid is the schema gate;
-// evidence resolution is the L1 gate, and both must pass.
+// evidence resolution is the separate gate the executor runs, and both must pass.
 func Valid(c Candidate) bool {
 	if _, ok := validKinds[c.Kind]; !ok {
 		return false

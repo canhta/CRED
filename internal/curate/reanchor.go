@@ -16,15 +16,15 @@ import (
 
 // ReanchorStore is the subset of the row store re-anchoring needs. It hands back
 // live anchored evidence and applies an expiry the reanchorer already decided;
-// it makes no L3 decision itself, for the same reason the reconciler does not:
-// the deterministic decision lives in internal/anchor (pure), and the store only
-// persists the close.
+// it makes no invalidation decision itself, for the same reason the reconciler
+// does not: the deterministic decision lives in internal/anchor (pure), and the
+// store only persists the close.
 type ReanchorStore interface {
 	LiveAnchoredEvidence(ctx context.Context, repo string) ([]pg.AnchoredEvidence, error)
 	ExpireClaim(ctx context.Context, id, reason string, now time.Time) error
 }
 
-// Reanchorer runs L3's deterministic invalidation: for each live claim anchored
+// Reanchorer runs the anchor ladder's deterministic invalidation: for each live claim anchored
 // to a file under a repository root, it re-resolves the stored anchor against
 // the current file and expires the claim when the verdict is a semantic change
 // or ambiguous. Formatting churn — tier 4 changed while tiers 1 and 2 hold —
@@ -43,8 +43,9 @@ func NewReanchorer(store ReanchorStore, log *slog.Logger) *Reanchorer {
 	return &Reanchorer{store: store, log: log}
 }
 
-// ReanchorReport is what one re-anchoring pass did. Kept legible on purpose: L3's
-// whole value is that the reason a claim survived or expired is inspectable.
+// ReanchorReport is what one re-anchoring pass did. Kept legible on purpose: the
+// whole value of the anchor ladder is that the reason a claim survived or expired
+// is inspectable.
 type ReanchorReport struct {
 	Repo        string
 	Checked     int      // anchored evidence rows resolved
@@ -60,9 +61,8 @@ type ReanchorReport struct {
 // files and expires the ones whose evidence no longer holds. root is the
 // repository root the evidence was seeded or written against (its absolute path
 // is the source_repo). Files are read fresh from disk, so this is the operation
-// a CI step or a post-edit hook runs to enforce PRD acceptance criterion 4: a
-// pure-formatting commit expires zero claims; a semantic change expires exactly
-// the right ones.
+// a CI step or a post-edit hook runs: a pure-formatting commit expires zero
+// claims; a semantic change expires exactly the right ones.
 func (r *Reanchorer) Reanchor(ctx context.Context, root string) (ReanchorReport, error) {
 	started := time.Now()
 
@@ -129,7 +129,7 @@ func (r *Reanchorer) Reanchor(ctx context.Context, root string) (ReanchorReport,
 
 	rep.Duration = time.Since(started)
 	if r.log != nil {
-		// Identifiers and counts only — never source text (L8).
+		// Identifiers and counts only — never source text.
 		r.log.Info("reanchor pass",
 			slog.String("repo", repo),
 			slog.Int("checked", rep.Checked),
