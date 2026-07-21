@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and fill in your own values.
+# db_master_password does NOT go here — set it via
+# TF_VAR_db_master_password instead, so it never touches a file at all.
+aws_region  = "your-region"
+github_repo = "your-github-username/your-fork"
+domain_name = "your-domain.example.com"

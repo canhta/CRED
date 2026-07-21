@@ -1,0 +1,17 @@
+
+# Third-party papers — reference locally, do not redistribute
+docs/*.pdf
+
+**/__pycache__/
+
+# Local secrets — API keys for live testing. NEVER committed.
+.env
+.env.*
+!.env.example
+.secrets/
+cred
+
+# superpowers subagent-driven-development execution ledger — scratch state
+# for resuming an interrupted run, not a project artifact.
+docs/superpowers
+.superpowers/

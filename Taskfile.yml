@@ -1,0 +1,84 @@
+version: "3"
+
+# One Taskfile orchestrates the two toolchains: Go at the repo root and the SPA
+# in web/. The web tasks are thin npm passthroughs so the frontend keeps its own
+# scripts as the source of truth.
+
+tasks:
+  api:build:
+    desc: Build every Go package, CGO off.
+    cmds:
+      - CGO_ENABLED=0 go build ./...
+
+  api:test:
+    desc: Run the Go tests.
+    cmds:
+      - CGO_ENABLED=0 go test ./...
+
+  api:lint:
+    desc: Lint the Go code.
+    cmds:
+      - go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
+
+  gen:types:
+    desc: Generate TypeScript types from the Go API structs.
+    cmds:
+      - go run github.com/gzuidhof/tygo@latest generate
+
+  web:dev:
+    desc: Run the Vite dev server (proxies /api to the Go process).
+    dir: web
+    cmds:
+      - npm run dev
+
+  web:build:
+    desc: Build the SPA into web/dist.
+    dir: web
+    cmds:
+      - npm run build
+
+  web:test:
+    desc: Run the SPA tests.
+    dir: web
+    cmds:
+      - npm test
+
+  dev:
+    desc: Run the API and the Vite dev server together. Vite proxies /api to :8080.
+    deps:
+      - task: dev:api
+      - task: web:dev
+
+  dev:api:
+    internal: true
+    cmds:
+      - go run . web
+
+  build:
+    desc: Build the SPA, then the single binary with the SPA embedded.
+    cmds:
+      - task: web:build
+      - CGO_ENABLED=0 go build -tags embed -o cred .
+
+  db:reset:
+    desc: Drop and recreate the local Postgres container (destroys local data), then apply migrations.
+    cmds:
+      - docker compose down -v
+      - docker compose up -d db
+      - |
+        until docker compose exec -T db pg_isready -U ${CRED_DB_USER:-cred} -d ${CRED_DB_NAME:-cred} >/dev/null 2>&1; do sleep 1; done
+      - go run . migrate
+
+  db:seed:
+    desc: Register the local dev console account (admin@cred.local / cred-dev-password). Run after db:reset.
+    cmds:
+      - |
+        go run . web --addr :18080 &
+        pid=$!
+        trap 'kill $pid 2>/dev/null' EXIT
+        until curl -sf http://localhost:18080/api/health >/dev/null 2>&1; do sleep 0.5; done
+        curl -sf -X POST http://localhost:18080/api/auth/register \
+          -H 'Content-Type: application/json' \
+          -d '{"email":"admin@cred.local","password":"cred-dev-password"}' \
+          -o /dev/null -w 'register: HTTP %{http_code}\n'
+        echo "Seeded dev account -> admin@cred.local / cred-dev-password"
