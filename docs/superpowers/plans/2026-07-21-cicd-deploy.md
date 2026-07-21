@@ -246,7 +246,7 @@ git commit -m "infra: bootstrap the Terraform state backend (S3 + DynamoDB lock)
 
 ---
 
-### Task 2: Terraform root skeleton — providers, data sources, variables
+### Task 2: Terraform root skeleton — providers, data sources, variables — DONE
 
 **Files:**
 - Create: `infra/terraform/versions.tf`
@@ -269,7 +269,7 @@ git commit -m "infra: bootstrap the Terraform state backend (S3 + DynamoDB lock)
   `var.github_repo`, `var.domain_name`, `var.db_master_password` — all
   consumed by Tasks 3-8.
 
-- [ ] **Step 1: Write `versions.tf` with a partial backend block**
+- [x] **Step 1: Write `versions.tf` with a partial backend block**
 
 ```hcl
 # infra/terraform/versions.tf
@@ -297,7 +297,7 @@ provider "aws" {
 }
 ```
 
-- [ ] **Step 2: Write `variables.tf` — no account-specific defaults**
+- [x] **Step 2: Write `variables.tf` — no account-specific defaults**
 
 ```hcl
 # infra/terraform/variables.tf
@@ -326,7 +326,7 @@ variable "db_master_password" {
 }
 ```
 
-- [ ] **Step 3: Write `backend.hcl.example` and `terraform.tfvars.example` —
+- [x] **Step 3: Write `backend.hcl.example` and `terraform.tfvars.example` —
   the templates a fork copies and fills in**
 
 ```hcl
@@ -355,7 +355,7 @@ This operator's own (not committed as defaults) values:
 `aws_region = "ap-southeast-1"`,
 `github_repo = "canhta/CRED"`, `domain_name = "cred.quickdemo.site"`.
 
-- [ ] **Step 4: Write `data.tf`**
+- [x] **Step 4: Write `data.tf`**
 
 ```hcl
 # infra/terraform/data.tf
@@ -400,14 +400,14 @@ data "aws_ami" "al2023_arm64" {
 }
 ```
 
-- [ ] **Step 5: Write an empty `outputs.tf` stub**
+- [x] **Step 5: Write an empty `outputs.tf` stub**
 
 ```hcl
 # infra/terraform/outputs.tf
 # Filled in by later tasks as each resource is added.
 ```
 
-- [ ] **Step 6: Write `infra/terraform/.gitignore`**
+- [x] **Step 6: Write `infra/terraform/.gitignore`**
 
 ```
 .terraform/
@@ -423,7 +423,7 @@ crash.log
 `.example` templates are tracked, so each fork's actual values (repo slug,
 domain, state bucket name) never touch git history.
 
-- [ ] **Step 7: Create this operator's own (gitignored) `backend.hcl` and
+- [x] **Step 7: Create this operator's own (gitignored) `backend.hcl` and
   `terraform.tfvars` from the examples**
 
 ```bash
@@ -436,7 +436,7 @@ Then edit `backend.hcl` to set `bucket = "cred-tfstate-931628308308"` (from
 Task 1's `state_bucket` output) and edit `terraform.tfvars` to set
 `github_repo = "canhta/CRED"` and `domain_name = "cred.quickdemo.site"`.
 
-- [ ] **Step 8: Init and validate (no resources yet — this only proves the
+- [x] **Step 8: Init and validate (no resources yet — this only proves the
   backend and data sources resolve)**
 
 ```bash
@@ -453,7 +453,7 @@ Expected: `terraform init` reports
 `No changes. Your infrastructure matches the configuration.` (data sources
 only, no resources declared yet).
 
-- [ ] **Step 9: Commit (the tracked files only — `backend.hcl` and
+- [x] **Step 9: Commit (the tracked files only — `backend.hcl` and
   `terraform.tfvars` stay local, per `.gitignore`)**
 
 ```bash
