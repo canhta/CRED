@@ -2,6 +2,21 @@
 
 **Scope of review:** local checkout at `/Users/canh/Solo/OSS/mem0`, package version `2.0.12` (`pyproject.toml:8`), Apache-2.0 (`pyproject.toml:14`). Read of actual source: `mem0/memory/main.py` (3777 LOC), `mem0/configs/prompts.py` (1062 LOC), `mem0/memory/storage.py`, `mem0/utils/factory.py`, `mem0/utils/scoring.py`, `mem0/memory/notices.py`, `openmemory/api/app/*`, `server/`, `tests/`.
 
+> **Provenance warning — addendum added 2026-07-21, outside the commissioned
+> review above.** Triggered by a conversational question about CRED's own
+> SSO/MCP auth status; a targeted follow-up check found `openmemory/` is
+> **explicitly sunset**. Its README states *"⚠️ Sunsetting Notice: OpenMemory
+> is being sunset... please use the Mem0 self-hosted server instead"*
+> (`openmemory/README.md:3`). `server/` is the current self-hosted product.
+> This re-frames every OpenMemory finding below (§5, §7): the MCP surface and
+> the ACL bugs documented in this file live in the codebase mem0 itself is
+> retiring, not in the one it's steering users toward. `server/` — the
+> actively maintained successor — has **no MCP implementation at all**
+> (`grep -rli mcp server/` → zero hits). Only the README line and that one
+> grep were checked for this addendum; the rest of `server/` and
+> `openmemory/` below were verified as part of the original commissioned
+> review.
+
 ---
 
 ## Verdict
@@ -318,7 +333,7 @@ Weaknesses: `VectorStoreFactory.create` just splats the config dict into the con
 | Python SDK (hosted) | `mem0.MemoryClient` — `mem0/client/main.py` (1832 LOC) | strict superset |
 | TypeScript SDK | `mem0-ts/src/oss/` | at parity — same `ADDITIVE_EXTRACTION_PROMPT` (`mem0-ts/src/oss/src/memory/index.ts:869`) |
 | Self-hosted REST | `server/` (FastAPI + alembic + Next.js dashboard) | 14 memory endpoints inline in `server/main.py:321-556`; control plane in `server/routers/` (auth, api-keys, entities, requests). Thin passthrough to one global `Memory` singleton |
-| MCP (OSS) | `openmemory/api/app/mcp_server.py` | SSE + streamable-HTTP, no stdio |
+| MCP (OSS) | `openmemory/api/app/mcp_server.py` | SSE + streamable-HTTP, no stdio. **Lives in the sunset codebase** — `server/`, its designated successor, has no MCP surface at all (see provenance addendum at the top of this document) |
 | MCP (hosted) | `https://mcp.mem0.ai/mcp/` — `integrations/mem0-plugin/.mcp.json` | requires `MEM0_API_KEY` |
 | CLI | `cli/python`, `cli/node` | |
 | Agent plugins | `integrations/mem0-plugin/` (Claude Code / Cursor / Codex / OpenCode), `.claude-plugin/marketplace.json`, `skills/` | see §8 |
