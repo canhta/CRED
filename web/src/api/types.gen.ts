@@ -13,6 +13,10 @@ its caller may not read would be the access-control failure, now over HTTP.
 
 
 //////////
+// source: auth.go
+
+
+//////////
 // source: claims.go
 
 
@@ -102,6 +106,7 @@ export interface HealthResponse {
   status: string;
   version: string;
   principal: string;
+  registration_open: boolean;
 }
 /**
  * Scope narrows where a claim applies.
@@ -249,4 +254,25 @@ export interface UsageResponse {
   denied: number /* int */;
   cost_by_scope: ScopeCost[];
   scope_growth: ScopeGrowth[];
+}
+/**
+ * RegisterRequest is the body of POST /api/auth/register.
+ */
+export interface RegisterRequest {
+  email: string;
+  password: string;
+}
+/**
+ * LoginRequest is the body of POST /api/auth/login.
+ */
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+/**
+ * AuthResponse is the body of a successful register or login.
+ */
+export interface AuthResponse {
+  principal: string;
+  role: string;
 }

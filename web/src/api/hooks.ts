@@ -1,5 +1,14 @@
-import { useQuery } from '@tanstack/react-query';
-import { getClaim, getClaims, getHealth, getRecall, getUsage } from './client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  getClaim,
+  getClaims,
+  getHealth,
+  getRecall,
+  getUsage,
+  login,
+  logout,
+  register,
+} from './client';
 import type { ClaimsParams, RecallParams, UsageParams } from './client';
 
 export const queryKeys = {
@@ -46,5 +55,23 @@ export function useUsage(params: UsageParams = {}) {
   return useQuery({
     queryKey: queryKeys.usage(params),
     queryFn: () => getUsage(params),
+  });
+}
+
+export function useRegister() {
+  return useMutation({ mutationFn: register });
+}
+
+export function useLogin() {
+  return useMutation({ mutationFn: login });
+}
+
+export function useLogout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: logout,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health });
+    },
   });
 }

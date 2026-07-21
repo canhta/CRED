@@ -20,4 +20,7 @@ export type {
   LimitStatus,
   ScopeCost,
   ScopeGrowth,
+  RegisterRequest,
+  LoginRequest,
+  AuthResponse,
 } from './types.gen';

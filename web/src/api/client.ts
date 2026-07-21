@@ -1,15 +1,21 @@
 import { routes } from './routes';
 import type {
+  AuthResponse,
   ClaimDetail,
   ClaimList,
   Health,
+  LoginRequest,
   RecallResponse,
+  RegisterRequest,
   UsageResponse,
 } from './types';
 
-// The principal is a seam: today it rides on a header, later an OIDC/SSO
-// middleware replaces the source without any handler changing. It is settable
-// so the console can act as a different principal without a rebuild.
+// X-CRED-Principal remains the identity source for the header/bearer-token
+// path (automation, testing, MCP) -- it is not used for the browser session
+// path added in this feature, where authenticate() resolves the principal
+// from a verified session cookie and a client-supplied header cannot
+// override it. Settable so a script can act as a different principal
+// without a rebuild.
 let currentPrincipal = 'local';
 
 export function setPrincipal(principal: string): void {
@@ -45,6 +51,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new ApiError(res.status, res.statusText, body);
+  }
+
+  // logout returns 204 with no body; res.json() would throw on an empty
+  // response.
+  if (res.status === 204) {
+    return undefined as T;
   }
 
   return (await res.json()) as T;
@@ -105,4 +117,24 @@ export function getUsage(params: UsageParams = {}): Promise<UsageResponse> {
 
   const qs = query.toString();
   return request<UsageResponse>(qs ? `${routes.usage()}?${qs}` : routes.usage());
+}
+
+function postJSON<T>(url: string, body: unknown): Promise<T> {
+  return request<T>(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function register(params: RegisterRequest): Promise<AuthResponse> {
+  return postJSON<AuthResponse>(routes.register(), params);
+}
+
+export function login(params: LoginRequest): Promise<AuthResponse> {
+  return postJSON<AuthResponse>(routes.login(), params);
+}
+
+export function logout(): Promise<void> {
+  return request<void>(routes.logout(), { method: 'POST' });
 }

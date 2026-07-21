@@ -7,6 +7,9 @@ export {
   getClaim,
   getRecall,
   getUsage,
+  login,
+  logout,
+  register,
   setPrincipal,
   getPrincipal,
 } from './client';
@@ -22,5 +25,8 @@ export {
   useClaim,
   useRecall,
   useUsage,
+  useLogin,
+  useLogout,
+  useRegister,
   queryKeys,
 } from './hooks';
