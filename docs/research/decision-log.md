@@ -1528,3 +1528,74 @@ RE2 has no backreferences and no lookaround. Patterns ported from ctags optlib
 that rely on either must be rewritten for RE2 before use; the shipped set is
 authored RE2-native and precision-tuned, because a false-positive anchor
 (re-validating against the wrong code) is worse than a missed one.
+
+## D-021 — A React portal, and CRED grows from a CLI into a self-hosted console
+
+- **Date:** 2026-07-21
+- **Status:** Decided (stack chosen by the operator after research; scope stated by the operator)
+- **Evidence:** [portal-monorepo-stack.md](portal-monorepo-stack.md), [portal-api-and-frontend.md](portal-api-and-frontend.md). Ten Go-with-UI projects surveyed first-hand (Gitea, Prometheus, Grafana, CockroachDB, Vault, Consul, SigNoz, Coder, Woodpecker, Syncthing).
+
+### What the portal is for
+
+A CLI-plus-Postgres tool cannot be measured or run for a week: there is no
+surface to see a claim, why it ranked, why it expired, or who sees it. The portal
+is that instrument. The scope the operator named is larger than a read-only
+dashboard — usage/limit management, analytics and charts, team management, SSO,
+project management, file upload. That makes it a self-hosted management console,
+not a viewer, and it is what justifies a real typed SPA over a hypermedia page.
+
+### Layout — Go-first, not a JS monorepo
+
+The research corrected the first instinct. All ten surveyed Go+UI projects keep
+the **Go module at the repo root** and the **frontend in one top-level directory**
+(`web/` or `ui/`); none uses an `apps/web` + `apps/api` workspace — that is a JS
+convention absent from the Go cohort. CRED follows the cohort: Go stays at root,
+the SPA lives in `web/`, a thin `Taskfile.yml` orchestrates both toolchains, and
+a plain `package.json` (no Nx/Turborepo/pnpm-workspace — one app is far below
+where any pays off).
+
+### Serving — the single binary survives
+
+`cred web` serves the JSON API, the built SPA embedded via `go:embed`, and an SPA
+history fallback, from one CGO-free static binary. The embed sits behind a build
+tag (`-tags embed`) with a disk/stub fallback, so `go build` and `go test` run on
+a fresh clone before `vite build` has produced `web/dist` — the pattern Vault,
+Prometheus, Coder and Cockroach all use. The embedding `.go` file lives at the
+repo root because `go:embed` forbids `..`, so it can reach `web/dist`. In dev,
+the Vite server proxies `/api` to the Go process. Content-hashed assets get
+`Cache-Control: immutable`; `index.html` gets `no-cache`.
+
+### Stack — the operator chose the typed React path
+
+- **API:** Huma on the stdlib `net/http` adapter (`humago`) — the Go 1.22+
+  ServeMux is enough router, and Huma auto-generates an OpenAPI spec at
+  `/openapi.json` from Go structs (code-first, one source of truth).
+- **Type contract:** hey-api generates a typed TypeScript client from that spec,
+  so a URL/method/shape mismatch fails at compile time rather than at runtime.
+- **Frontend:** Vite + React + TypeScript, **Vitest** + @testing-library/react,
+  TanStack Query (server state), TanStack Table (grids), TanStack Router (typed
+  routes suit a filter-driven console), shadcn/ui + Tailwind (own the components,
+  low lock-in).
+
+The alternative the research leaned toward for a read-mostly surface — templ +
+htmx — was set aside deliberately: the named scope (SSO, uploads, charts,
+project management) is interactive and stateful enough that the SPA's cost buys
+capacity that will be used, and the team's skill is React.
+
+### Foundation first, features as slices
+
+The foundation is invariant to the feature list: an app shell with typed routing
+and navigation, the Huma→hey-api typed pipeline, an **auth middleware seam**
+(principal via header/token now, OIDC/SSO later without re-architecting), the
+embed+fallback serving, and one real vertical screen (the claims browser over the
+existing store read models) to prove the pipeline end to end. Everything the
+operator named — limits, analytics/charts, team, SSO, projects, uploads — lands
+as a later slice against this foundation, each with its own API endpoints and
+screen. Recorded so the growth is planned, not improvised.
+
+### Honest scope note
+
+This enlarges CRED beyond "parity with mem0 plus a team layer." The engine
+thesis (a claim lives only while its evidence does) is unchanged; the console is
+new surface area, sequenced behind a foundation so it does not destabilize the
+verified core.

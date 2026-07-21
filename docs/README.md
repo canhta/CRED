@@ -32,6 +32,9 @@ evidence does.
   cut from v1, and what replaces it.
 - [Go repository conventions](research/spikes/go-repo-conventions.md) — layout,
   linting, testing, and what a solo maintainer should skip.
+- [Portal repo layout, embedding, and tooling](research/portal-monorepo-stack.md)
+  — how mature Go+web projects lay out the frontend, the `go:embed` serving
+  pattern, and whether a monorepo tool is warranted for one Go module + one app.
 - [Semantic anchoring](research/spikes/semantic-anchoring.md) — L3's fingerprint
   ladder, and whether a tree-sitter binding exists for Go with `CGO_ENABLED=0`.
 - [Code anchoring prior art](research/code-anchoring-prior-art.md) — the
@@ -46,6 +49,10 @@ evidence does.
   adversarial cases, and the shape of the suite.
 - [Packaging and first run](research/spikes/packaging-and-first-run.md) —
   distribution, release automation, and the three-minute first run.
+- [Portal API and frontend](research/portal-api-and-frontend.md) — best-practice
+  research for the web portal: the Go HTTP/API layer, the Go↔TypeScript typed
+  contract, the React stack, and the templ+htmx alternative, with decision
+  forks.
 
 ## Evidence
 
