@@ -10,6 +10,7 @@ import { Shell } from './app/Shell';
 import { ClaimsPage } from './pages/ClaimsPage';
 import { ClaimDetailPage } from './pages/ClaimDetailPage';
 import { RecallPage } from './pages/RecallPage';
+import { UsagePage } from './pages/UsagePage';
 import { Placeholder } from './pages/Placeholder';
 
 const rootRoute = createRootRoute({
@@ -70,7 +71,7 @@ const recallRoute = createRoute({
 const usageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/usage',
-  component: () => <Placeholder title="Usage" />,
+  component: UsagePage,
 });
 
 const teamRoute = createRoute({
