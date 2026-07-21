@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canhta/cred/internal/anchor"
 	"github.com/canhta/cred/internal/claim"
 	"github.com/canhta/cred/internal/nominate"
 	"github.com/canhta/cred/internal/store/pg"
@@ -86,6 +87,17 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 		}
 
 		now := time.Now().UTC()
+		// Compute the L3 anchor from the whole trusted source (in.Source), so tier
+		// 1 is structural rather than a line number. The span's content hash is
+		// tier 4. Attestations take no source and skip this (ok == false).
+		var anc anchor.Anchor
+		if a, ok := anchor.For(in.SourceKind); ok {
+			anc = a.Compute(
+				anchor.Source{Text: in.Source, Kind: in.SourceKind},
+				anchor.Span{LineStart: span.lineStart, LineEnd: span.lineEnd, ByteHash: hashHex(span.text)},
+			)
+		}
+
 		id, err := e.writeOne(ctx, modelID, writeInput{
 			statement:  c.Statement,
 			kind:       c.Kind,
@@ -96,6 +108,7 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 			lineStart:  span.lineStart,
 			lineEnd:    span.lineEnd,
 			evidence:   span.text,
+			anchor:     anc,
 			confidence: c.Confidence,
 			model:      nominate.PromptVersion, // the boundary that produced it
 			principals: in.Principals,
@@ -184,6 +197,7 @@ type writeInput struct {
 	lineStart  int
 	lineEnd    int
 	evidence   string
+	anchor     anchor.Anchor
 	confidence float64
 	model      string
 	attestedBy claim.PrincipalID
@@ -201,15 +215,18 @@ func (e *Executor) writeOne(ctx context.Context, modelID int, w writeInput) (str
 	}
 
 	ev := claim.Evidence{
-		Kind:          w.sourceKind,
-		Repo:          w.repo,
-		Path:          w.path,
-		LineStart:     w.lineStart,
-		LineEnd:       w.lineEnd,
-		ExtractedText: w.evidence,
-		ContentSHA256: hashHex(w.evidence),
-		Valid:         claim.Interval{From: w.now},
-		Recorded:      claim.Interval{From: w.now},
+		Kind:             w.sourceKind,
+		Repo:             w.repo,
+		Path:             w.path,
+		LineStart:        w.lineStart,
+		LineEnd:          w.lineEnd,
+		ExtractedText:    w.evidence,
+		ContentSHA256:    hashHex(w.evidence),
+		AnchorSymbolPath: w.anchor.SymbolPath,
+		AnchorNodeHash:   w.anchor.NodeHash,
+		AnchorWindowHash: w.anchor.WindowHash,
+		Valid:            claim.Interval{From: w.now},
+		Recorded:         claim.Interval{From: w.now},
 	}
 	if w.attestedBy != "" {
 		ev.AttestedBy = w.attestedBy

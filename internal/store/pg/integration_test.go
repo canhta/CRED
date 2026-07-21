@@ -181,9 +181,12 @@ func TestChangedFileSupersedesRatherThanDuplicates(t *testing.T) {
 	e := newEmbedder(t)
 	root := writeFixtureRepo(t, agentsV1)
 
-	seedRepo(t, st, e, root)
-	beforeClaims, _, err := st.Counts(t.Context())
-	require.NoError(t, err)
+	seeded := seedRepo(t, st, e, root)
+	// Scope the count to this test's repo, not st.Counts()'s global total: the
+	// integration packages share one database and CI runs them concurrently
+	// (go test -tags=integration ./... with default -p), so a global delta would
+	// pick up another package's writes mid-test.
+	beforeClaims := liveClaimsForRepo(t, st, seeded.Repo)
 
 	changed := strings.Replace(agentsV1,
 		"reciprocal rank fusion at k equal to sixty",
@@ -194,10 +197,25 @@ func TestChangedFileSupersedesRatherThanDuplicates(t *testing.T) {
 	rep := seedRepo(t, st, e, root)
 	require.Positive(t, rep.Superseded, "a changed chunk did not supersede its predecessor")
 
-	afterClaims, _, err := st.Counts(t.Context())
-	require.NoError(t, err)
+	afterClaims := liveClaimsForRepo(t, st, seeded.Repo)
 	require.Equal(t, beforeClaims, afterClaims,
 		"live claim count must not grow when a chunk is replaced")
+}
+
+// liveClaimsForRepo counts live claims whose evidence belongs to repo. It reads
+// the pool directly — a test asserting store state, scoped so a concurrent
+// package sharing the database cannot perturb the count.
+func liveClaimsForRepo(t *testing.T, st *pg.Store, repo string) int {
+	t.Helper()
+	var n int
+	err := st.Pool().QueryRow(t.Context(), `
+		SELECT count(*) FROM claims c
+		 WHERE c.superseded_at IS NULL
+		   AND EXISTS (SELECT 1 FROM claim_evidence ce
+		                 JOIN evidence e ON e.id = ce.evidence_id
+		                WHERE ce.claim_id = c.id AND e.source_repo = $1)`, repo).Scan(&n)
+	require.NoError(t, err)
+	return n
 }
 
 // TestBothArmsContribute — if one arm never appears, the system is doing

@@ -115,8 +115,18 @@ type Evidence struct {
 	ExtractedText string
 
 	// ContentSHA256 is the change detector. Re-seeding compares it and skips
-	// unchanged chunks, which is what makes seeding idempotent.
+	// unchanged chunks, which is what makes seeding idempotent. It is also tier 4
+	// of the L3 anchor ladder — the raw byte hash, diagnostic only.
 	ContentSHA256 string
+
+	// The semantic anchor (L3), tiers 1–3. Computed at ingest by internal/anchor
+	// from the whole source file, stored here, and re-resolved when the file
+	// changes. Empty on attestations and on evidence written before anchoring
+	// shipped — such rows are tier-4-only and re-anchoring leaves them untouched.
+	// Hashes are hex.
+	AnchorSymbolPath string // tier 1: heading path or symbol path
+	AnchorNodeHash   string // tier 2: normalized enclosing-node hash
+	AnchorWindowHash string // tier 3: normalized context-window hash
 
 	AttestedBy PrincipalID
 	AttestedAt time.Time

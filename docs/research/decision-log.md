@@ -1329,3 +1329,86 @@ now) and the first crossing of the LLM boundary (`internal/nominate`).
   tech-decisions spike), fuzzy deferred.
 - `cred log` and `cred forget` — visibility and reversal are now product
   surface, not a future nicety.
+
+---
+
+## D-018 — L3 ships for text; the tree-sitter CGO gate is cleared, code anchoring gated elsewhere
+
+- **Date:** 2026-07-21
+- **Status:** Decided
+- **Evidence:** [semantic-anchoring.md](spikes/semantic-anchoring.md)
+
+### Decision
+
+Semantic anchoring (L3) ships for **text/Markdown evidence** — the entire corpus
+today (D-016). The fingerprint ladder lives in `internal/anchor` (pure, like
+`temporal` and `acl`), is wired into seeding and the write path, and drives a
+deterministic `cred reanchor` invalidation. **Code anchoring does not ship in
+this slice**, but the reason is no longer CGO.
+
+### The gate, and that it cleared
+
+The question that gated the slice was the same shape as the tokenizer's and the
+reranker's: **does a usable tree-sitter binding exist for Go with
+`CGO_ENABLED=0`?** Tree-sitter is a C library, and `CGO_ENABLED=0` is
+non-negotiable (D-008).
+
+The spike answered it empirically. **It cleared.** `codeberg.org/hum3/gotreesitter`
+v0.6.7 — a pure-Go GLR reimplementation loading tree-sitter's parse-table format —
+builds under `CGO_ENABLED=0` (zero cgo packages), cross-compiles statically,
+parses Go into a correct AST, and computes a tier-1 symbol path and tier-2
+normalized node hash that **hold under formatting churn and an insertion above,
+and change only on a semantic edit** — exactly L3's law.
+
+The three C bindings (smacker, official `tree-sitter/go-tree-sitter`,
+`alexaandru/go-sitter-forest`) are all CGO and all fail the `CGO_ENABLED=0`
+build. The wazero/WASM binding (`malivvan/tree-sitter`) is CGO-free but ships no
+Go grammar.
+
+### Why code anchoring is still deferred — on a smaller gate
+
+Not on CGO, which is disproved. On two other grounds:
+
+1. **No producer.** Every `Evidence` row is `document` or `attestation`; nothing
+   emits `code` evidence yet. A 10 MB parser dependency (the `grammars` package
+   embeds all 206 grammars; the stripped test binary is 19 MB against ~9 MB
+   today) for a code path with zero callers is weight for nothing.
+2. **Fidelity is unverified — the D-008 tokenizer lesson.** A from-scratch Go
+   reimplementation of a parser is the same risk class as a hand-written
+   tokenizer: nearly-right is worthless for an anchor, because a confidently
+   wrong claim is worse than no claim. `gotreesitter` is v0.6.x, single
+   maintainer, with headline benchmark claims of exactly the seductive shape
+   D-010 caught. Its grammar fidelity to upstream across real Go is unverified
+   beyond a smoke test, and must be diffed before it is trusted.
+
+So `internal/anchor` ships the pluggable seam `anchor.For(kind)`; the code
+anchorer drops in at `SourceCode` with no caller change, gated on a code producer
+plus a fidelity diff against upstream tree-sitter.
+
+### What this rules out
+
+- Reading "code anchoring is deferred" as "tree-sitter needs CGO". It does not
+  (verified). The deferral is dependency weight and fidelity, not the build
+  constraint.
+- Adopting a reimplemented parser as the anchoring authority on faith. The
+  fidelity diff is a precondition, per D-008.
+- Expiring on tier 4 alone. Pre-existing tier-4-only evidence and attestations
+  carry no tier-1/2 anchor, and re-anchoring leaves them untouched rather than
+  expiring — over-expiring on a byte hash is the failure L3 exists to prevent.
+
+### What this forces
+
+- A grammar-fidelity spike (the tokenizer suites are the template) before
+  `gotreesitter` is wired in, and a plan for the ~10 MB binary cost — trim to one
+  grammar, or a pure-Go build tag, which does **not** reintroduce the CGO footgun.
+- `cred reanchor <path>` as the deterministic invalidation primitive a CI step or
+  a post-edit hook runs — a subcommand, not a daemon, because a file changing on
+  disk is an external event a worker cannot see without watching the filesystem.
+
+### Open tension (unresolved)
+
+Seeding still supersedes a chunk on any raw-content change (tier 4), so a
+formatting-only re-seed churns claims even though `cred reanchor` on the same
+change would not. Re-anchoring is the L3-correct invalidation; unifying the two
+so the seed path also decides on tiers 1–2 is future work, and until then
+acceptance criterion 4 is met via `reanchor`, not via re-seed.

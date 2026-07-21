@@ -16,6 +16,7 @@ package pg
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -127,6 +128,21 @@ func (s *Store) PresentModel(ctx context.Context) (id int, name string, dims int
 		`SELECT id, name, dimensions FROM embedding_models WHERE status = 'PRESENT'`,
 	).Scan(&id, &name, &dims)
 	return id, name, dims, translate(err)
+}
+
+// hashArg turns a hex hash into a bytea insert argument, or NULL when empty. An
+// empty tier-2/3 hash means "no anchor at this tier" — an attestation, or a
+// document span with no enclosing heading — and NULL is how the schema records
+// that, distinct from a zero-length hash.
+func hashArg(hexStr string) (any, error) {
+	if hexStr == "" {
+		return nil, nil
+	}
+	b, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return nil, fmt.Errorf("decode anchor hash: %w", err)
+	}
+	return b, nil
 }
 
 // encodeHalfvec renders a vector in pgvector's text input format.

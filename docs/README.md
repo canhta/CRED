@@ -32,6 +32,8 @@ evidence does.
   cut from v1, and what replaces it.
 - [Go repository conventions](research/spikes/go-repo-conventions.md) — layout,
   linting, testing, and what a solo maintainer should skip.
+- [Semantic anchoring](research/spikes/semantic-anchoring.md) — L3's fingerprint
+  ladder, and whether a tree-sitter binding exists for Go with `CGO_ENABLED=0`.
 - [Technical decisions](research/spikes/tech-decisions.md) — language,
   datastore, queue, and the failure modes each choice implies.
 - [Language and MCP](research/spikes/tech-language-and-mcp.md) — runtime

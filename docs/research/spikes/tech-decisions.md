@@ -20,7 +20,7 @@ Companion document: [tech-language-and-mcp.md](tech-language-and-mcp.md).
 | Job queue | **River** — pure SQL tables, no extension required |
 | Dedup at v1 | **Exact hash only.** No MinHash/LSH |
 | Migrations | Mechanics in-language; **`squawk`** as the CI linter |
-| Code anchoring | **tree-sitter** symbol path + normalized AST-node hash |
+| Code anchoring | **tree-sitter** symbol path + normalized AST-node hash. A pure-Go, `CGO_ENABLED=0` parser exists and anchors Go correctly — [semantic-anchoring.md](semantic-anchoring.md), D-018. Text/Markdown anchoring ships now; code anchoring gated on a producer + a fidelity diff, not on CGO |
 | Reranking | ColBERT-style MaxSim over `bge-small-en-v1.5` token vectors. **Cross-encoder reranking is cut** — see [go-reranker.md](go-reranker.md) and D-010 |
 | Observability | OpenTelemetry emitted; never a bundled trace UI |
 

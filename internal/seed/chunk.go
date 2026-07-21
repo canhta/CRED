@@ -24,6 +24,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/canhta/cred/internal/anchor"
+	"github.com/canhta/cred/internal/claim"
 )
 
 // TargetFiles are the agent instruction files seeded from a repository root.
@@ -55,6 +58,12 @@ type Chunk struct {
 	Text      string
 	Heading   string
 	SHA256    string
+
+	// Anchor is the L3 fingerprint ladder for this span, computed from the whole
+	// file (so tier 1 is the heading path, not the line number). It is what makes
+	// a re-seeded or externally changed file expire the right claims and leave
+	// formatting-only changes alone.
+	Anchor anchor.Anchor
 }
 
 // Statement is the claim a chunk carries.
@@ -216,6 +225,20 @@ func ChunkFile(path string, relTo string) ([]Chunk, error) {
 	// Re-number after empty chunks were skipped, so ordinals are contiguous.
 	for i := range chunks {
 		chunks[i].Ordinal = i
+	}
+
+	// Compute each chunk's L3 anchor from the whole file. Tier 1 is the heading
+	// path enclosing the chunk's first line, which is why this needs the full
+	// file and not just the chunk. Tier 4 is the chunk's own content hash.
+	fullText := strings.Join(lines, "\n")
+	src := anchor.Source{Text: fullText, Kind: claim.SourceDocument}
+	var ta anchor.TextAnchorer
+	for i := range chunks {
+		chunks[i].Anchor = ta.Compute(src, anchor.Span{
+			LineStart: chunks[i].LineStart,
+			LineEnd:   chunks[i].LineEnd,
+			ByteHash:  chunks[i].SHA256,
+		})
 	}
 	return chunks, nil
 }

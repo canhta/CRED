@@ -122,7 +122,13 @@ jobs:
           path: ~/.cache/cred/models
           key: bge-small-en-v1.5-onnx
 
-      - run: go test -tags=integration -shuffle=on ./...
+      # -p 1: the integration packages share one database and are not isolated
+      # from each other (no per-test schema). Running their test binaries in
+      # parallel lets one package's writes perturb another's global-count and
+      # recall assertions — a flake that reads as a real failure. Serialise the
+      # DB-touching binaries; the suite is DB-bound, so the wall-clock cost is
+      # small. Within a package, tests still run in the order -shuffle picks.
+      - run: go test -tags=integration -shuffle=on -p 1 ./...
 
   # Single job, not across the matrix: the cheapest way to get race coverage.
   test-race:

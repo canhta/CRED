@@ -151,15 +151,25 @@ func (s *Store) insertSeedTx(ctx context.Context, tx pgx.Tx, modelID int, r Seed
 	if err != nil {
 		return "", "", fmt.Errorf("decode content hash: %w", err)
 	}
+	nodeHash, err := hashArg(r.Evidence.AnchorNodeHash)
+	if err != nil {
+		return "", "", err
+	}
+	windowHash, err := hashArg(r.Evidence.AnchorWindowHash)
+	if err != nil {
+		return "", "", err
+	}
 
 	err = tx.QueryRow(ctx, `
 		INSERT INTO evidence (source_kind, source_repo, source_path, chunk_ordinal,
 		                      line_start, line_end, extracted_text, content_sha256,
+		                      anchor_symbol_path, anchor_node_hash, anchor_window_hash,
 		                      valid_from, recorded_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
 		RETURNING id`,
 		string(r.Evidence.Kind), r.Evidence.Repo, r.Evidence.Path, r.Ordinal,
 		r.Evidence.LineStart, r.Evidence.LineEnd, r.Evidence.ExtractedText, sum,
+		r.Evidence.AnchorSymbolPath, nodeHash, windowHash,
 		r.Evidence.Recorded.From,
 	).Scan(&evidenceID)
 	if err != nil {
@@ -309,7 +319,7 @@ func (s *Store) LoadClaims(ctx context.Context, ids []string) ([]claim.Claim, er
 func (s *Store) LoadEvidence(ctx context.Context, claimIDs []string) (map[string][]claim.Evidence, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT ce.claim_id, e.id, e.source_kind, e.source_repo, e.source_path,
-		       e.line_start, e.line_end, e.extracted_text,
+		       e.line_start, e.line_end, e.extracted_text, e.anchor_symbol_path,
 		       e.valid_from, e.valid_until, e.recorded_at, e.superseded_at
 		  FROM claim_evidence ce
 		  JOIN evidence e ON e.id = ce.evidence_id
@@ -326,7 +336,7 @@ func (s *Store) LoadEvidence(ctx context.Context, claimIDs []string) (map[string
 		var e claim.Evidence
 		var validUntil, supersededAt *time.Time
 		if err := rows.Scan(&claimID, &e.ID, &e.Kind, &e.Repo, &e.Path,
-			&e.LineStart, &e.LineEnd, &e.ExtractedText,
+			&e.LineStart, &e.LineEnd, &e.ExtractedText, &e.AnchorSymbolPath,
 			&e.Valid.From, &validUntil, &e.Recorded.From, &supersededAt); err != nil {
 			return nil, translate(err)
 		}

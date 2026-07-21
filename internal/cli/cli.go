@@ -33,6 +33,7 @@ Commands:
   migrate            Apply database migrations (CRED schema + River tables)
   seed <path>        Seed claims from a repository's documentation
   recall <query>     Retrieve claims, showing why each one ranked
+  reanchor [path]    Re-check anchors (L3); expire claims whose source changed
   remember <text>    Contribute a claim by attestation (no API key needed)
   capture            Enqueue material for automatic extraction (hook entry point)
   curate             Run the background worker: nominate off the turn, dedup
@@ -107,6 +108,8 @@ func dispatch(ctx context.Context, cmd string, args []string, cfg config.Config,
 		return runSeed(ctx, args, cfg, log, stdout)
 	case "recall":
 		return runRecall(ctx, args, cfg, stdout)
+	case "reanchor":
+		return runReanchor(ctx, args, cfg, log, stdout)
 	case "remember":
 		return runRemember(ctx, args, cfg, log, stdout)
 	case "capture":

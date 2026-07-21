@@ -382,11 +382,19 @@ Named explicitly rather than left silent.
   machinery, but it does not yet nominate *contradictions* for the reconciler to
   expire. That step needs the same LLM boundary the extractor uses and is the
   next piece of curation. Expire, prune, and rescore are also not built.
-- **Semantic anchoring (L3).** Evidence carries a file path, a line range, and a
-  content hash — tier 4 of the fingerprint ladder only. There is no tree-sitter
-  symbol path and no normalized AST-node hash, so a pure-formatting commit
-  currently *would* expire claims. That is the acceptance criterion the ladder
-  exists to meet.
+- **Semantic anchoring (L3) — code tiers only.** The fingerprint ladder now ships
+  for **text/Markdown evidence**, which is the whole corpus today: `internal/anchor`
+  computes tier 1 (heading path), tier 2 (normalized enclosing-section hash) and
+  tier 3 (context-window hash) at ingest, and `cred reanchor <path>` re-resolves
+  each claim's anchor against the current file — a pure-formatting change expires
+  zero claims, a semantic change expires exactly the right ones, and the reason is
+  printed as a diff. What is **not** built is the **code** anchorer (tree-sitter
+  symbol path + AST-node hash). The gate for it — a tree-sitter binding that works
+  with `CGO_ENABLED=0` — was spiked and **cleared** (a pure-Go, CGO-free parser
+  exists and anchors Go correctly), so `anchor.For(kind)` is a pluggable seam the
+  code anchorer drops into. It is deferred not on CGO but on a code-evidence
+  producer existing and a grammar-fidelity diff against upstream tree-sitter (D-018,
+  [semantic-anchoring.md](docs/research/spikes/semantic-anchoring.md)).
 - **MaxSim second-stage ranking (D-010).** Retrieval is dense + lexical fused by
   RRF, with no reranking of any kind. MaxSim costs 242x storage per document and
   its storage strategy is an open design question, not a settled one.

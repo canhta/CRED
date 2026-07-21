@@ -51,6 +51,14 @@ func (s *Store) WriteClaim(ctx context.Context, modelID int, r WriteRecord) (cla
 	if err != nil {
 		return "", fmt.Errorf("decode statement hash: %w", err)
 	}
+	nodeHash, err := hashArg(r.Evidence.AnchorNodeHash)
+	if err != nil {
+		return "", err
+	}
+	windowHash, err := hashArg(r.Evidence.AnchorWindowHash)
+	if err != nil {
+		return "", err
+	}
 
 	// Attestation carries a person, not a repository span. The schema requires
 	// attested_by and attested_at to be set together, and rejects either alone.
@@ -65,14 +73,16 @@ func (s *Store) WriteClaim(ctx context.Context, modelID int, r WriteRecord) (cla
 	err = tx.QueryRow(ctx, `
 		INSERT INTO evidence (source_kind, source_repo, source_path, chunk_ordinal,
 		                      line_start, line_end, extracted_text, content_sha256,
+		                      anchor_symbol_path, anchor_node_hash, anchor_window_hash,
 		                      attested_by, attested_at, valid_from, recorded_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)
 		RETURNING id`,
 		// chunk_ordinal is NULL: write-path evidence is not a seeded chunk, so it
 		// is exempt from the one-live-chunk-per-(repo,path,ordinal) uniqueness.
 		// Many written claims may point at spans of the same file.
 		string(r.Evidence.Kind), r.Evidence.Repo, r.Evidence.Path, nil,
 		r.Evidence.LineStart, r.Evidence.LineEnd, r.Evidence.ExtractedText, evidenceSum,
+		r.Evidence.AnchorSymbolPath, nodeHash, windowHash,
 		attestedBy, attestedAt, r.Evidence.Recorded.From,
 	).Scan(&evidenceID)
 	if err != nil {
@@ -208,15 +218,20 @@ func (s *Store) ApplySupersession(ctx context.Context, c claim.Claim, reason str
 	return nil
 }
 
-// ForgetClaim expires a claim at now with no successor (D-016 reversal). It is
+// ExpireClaim closes a claim at now with no successor and records why. It is
 // expiry, not supersession: nothing replaces the claim, so superseded_by stays
-// NULL and the reason is 'forgotten'. Nothing is deleted — the row remains,
-// closed in transaction time, so the record that it was once believed survives.
-func (s *Store) ForgetClaim(ctx context.Context, id string, now time.Time) error {
+// NULL. Nothing is deleted — the row remains, closed in transaction time, so the
+// record that it was once believed survives. The WHERE guard keeps it idempotent
+// under a retried job or a concurrent pass.
+//
+// reason must be one the schema permits ('forgotten' for a human reversal,
+// 'stale_anchor' for an L3 re-anchoring failure). The caller decides the reason;
+// the store only persists the close.
+func (s *Store) ExpireClaim(ctx context.Context, id, reason string, now time.Time) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE claims
-		   SET superseded_at = $2, valid_until = $2, supersede_reason = 'forgotten'
-		 WHERE id = $1 AND superseded_at IS NULL`, id, now)
+		   SET superseded_at = $2, valid_until = $2, supersede_reason = $3
+		 WHERE id = $1 AND superseded_at IS NULL`, id, now, reason)
 	if err != nil {
 		return translate(err)
 	}
@@ -224,6 +239,74 @@ func (s *Store) ForgetClaim(ctx context.Context, id string, now time.Time) error
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ForgetClaim expires a claim at now as a human reversal (D-016). It is
+// ExpireClaim with the 'forgotten' reason, kept as a named method because that
+// is the operation `cred forget` performs.
+func (s *Store) ForgetClaim(ctx context.Context, id string, now time.Time) error {
+	return s.ExpireClaim(ctx, id, "forgotten", now)
+}
+
+// SupersedeReasonStaleAnchor is written when a claim is expired because its
+// evidence failed re-anchoring: tier 1 or 2 disagreed with the current source,
+// or the anchor resolved ambiguously (L3). It is expiry with no successor.
+const SupersedeReasonStaleAnchor = "stale_anchor"
+
+// AnchoredEvidence is one live, anchored evidence row and the live claim resting
+// on it, everything the re-anchoring check needs to resolve it against the
+// current file. Hashes are hex, matching internal/anchor.
+type AnchoredEvidence struct {
+	ClaimID    string
+	EvidenceID string
+	SourceKind string
+	Path       string
+	SymbolPath string
+	NodeHash   string
+	WindowHash string
+	ByteHash   string
+	LineStart  int
+	LineEnd    int
+}
+
+// LiveAnchoredEvidence returns the live, anchored evidence for a repository, so
+// the re-anchoring check can resolve each row against the current file. It
+// returns rows, not decisions: internal/anchor decides each verdict and
+// internal/curate applies the expiry — the store neither resolves nor expires
+// here, for the same reason L5 is decided in Go. Tier-4-only rows (empty symbol
+// path) are excluded; re-anchoring never touches them.
+func (s *Store) LiveAnchoredEvidence(ctx context.Context, repo string) ([]AnchoredEvidence, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT ce.claim_id, e.id, e.source_kind, e.source_path, e.anchor_symbol_path,
+		       e.anchor_node_hash, e.anchor_window_hash, e.content_sha256,
+		       e.line_start, e.line_end
+		  FROM evidence e
+		  JOIN claim_evidence ce ON ce.evidence_id = e.id
+		  JOIN claims c ON c.id = ce.claim_id
+		 WHERE e.source_repo = $1
+		   AND e.superseded_at IS NULL
+		   AND c.superseded_at IS NULL
+		   AND e.anchor_symbol_path <> ''
+		 ORDER BY e.source_path, e.line_start`, repo)
+	if err != nil {
+		return nil, translate(err)
+	}
+	defer rows.Close()
+
+	var out []AnchoredEvidence
+	for rows.Next() {
+		var a AnchoredEvidence
+		var nodeHash, windowHash, byteHash []byte
+		if err := rows.Scan(&a.ClaimID, &a.EvidenceID, &a.SourceKind, &a.Path, &a.SymbolPath,
+			&nodeHash, &windowHash, &byteHash, &a.LineStart, &a.LineEnd); err != nil {
+			return nil, translate(err)
+		}
+		a.NodeHash = hex.EncodeToString(nodeHash)
+		a.WindowHash = hex.EncodeToString(windowHash)
+		a.ByteHash = hex.EncodeToString(byteHash)
+		out = append(out, a)
+	}
+	return out, translate(rows.Err())
 }
 
 // WriteEntry is one row in `cred log`: a written claim with enough provenance

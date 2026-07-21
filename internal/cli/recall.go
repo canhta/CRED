@@ -78,7 +78,15 @@ func printResult(out io.Writer, res *recall.Result, full bool) {
 	for i, s := range res.Claims {
 		fmt.Fprintf(out, "%d. %s\n", i+1, s.Claim.Statement)
 		for _, e := range s.Claim.Evidence {
-			fmt.Fprintf(out, "   evidence  %s:%d-%d\n", e.Path, e.LineStart, e.LineEnd)
+			// Show the L3 tier-1 anchor when present: it is why the claim survives
+			// edits elsewhere in the file, and it makes the anchor legible rather
+			// than an opaque line range.
+			if e.AnchorSymbolPath != "" {
+				fmt.Fprintf(out, "   evidence  %s:%d-%d  [%s]\n",
+					e.Path, e.LineStart, e.LineEnd, e.AnchorSymbolPath)
+			} else {
+				fmt.Fprintf(out, "   evidence  %s:%d-%d\n", e.Path, e.LineStart, e.LineEnd)
+			}
 		}
 		fmt.Fprintf(out, "   score     %.6f  = %s\n", s.Score, explain(s.Contributions))
 		fmt.Fprintf(out, "   kind      %s   scope %s=%s   tokens %d\n",
