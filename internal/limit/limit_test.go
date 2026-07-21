@@ -81,6 +81,23 @@ func TestRecallRateBoundary(t *testing.T) {
 	}
 }
 
+func TestLoginAttemptsBoundary(t *testing.T) {
+	cfg := Config{MaxLoginAttempts: 3}
+	if d := LoginAttempts(2, cfg); !d.Allowed || d.Remaining != 1 {
+		t.Fatalf("one below the ceiling must be allowed with one remaining: %+v", d)
+	}
+	if d := LoginAttempts(3, cfg); d.Allowed || d.Reason != ReasonLoginAttempts {
+		t.Fatalf("at the ceiling must deny: %+v", d)
+	}
+}
+
+func TestLoginAttemptsDisabledIsUnlimited(t *testing.T) {
+	got := LoginAttempts(1_000_000, Config{MaxLoginAttempts: 0})
+	if !got.Allowed || got.Remaining != -1 {
+		t.Fatalf("a non-positive ceiling must disable the control: got %+v", got)
+	}
+}
+
 func TestPruneTargetGrowsWithOverage(t *testing.T) {
 	cfg := Config{ScopeClaimCeiling: 100, PruneAggressiveness: 0.5}
 

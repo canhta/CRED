@@ -29,6 +29,7 @@ const (
 	ReasonContributionQuota Reason = "contribution_quota"
 	ReasonCostCeiling       Reason = "cost_ceiling"
 	ReasonRecallRate        Reason = "recall_rate"
+	ReasonLoginAttempts     Reason = "login_attempts"
 )
 
 // Config is the resolved policy. Every field has a working default (see
@@ -53,6 +54,11 @@ type Config struct {
 	RecallRate       int
 	RecallWindow     time.Duration
 	MaxPackageClaims int
+
+	// Login attempts: failed logins per email per window. The brute-force /
+	// credential-stuffing defence on the one unauthenticated write path.
+	MaxLoginAttempts int
+	LoginWindow      time.Duration
 
 	// Scope growth bound: the per-scope live-claim ceiling, and how aggressively
 	// pruning cuts back once it is exceeded. Context grows roughly four times
@@ -86,6 +92,12 @@ func Defaults() Config {
 		RecallRate:       120,
 		RecallWindow:     time.Minute,
 		MaxPackageClaims: 50,
+
+		// Ten failed attempts per email per fifteen minutes: well above a
+		// human mistyping a password twice, well below a scripted attempt
+		// loop.
+		MaxLoginAttempts: 10,
+		LoginWindow:      15 * time.Minute,
 
 		// A scope holding thousands of live claims is past the point where recall
 		// stays sharp; prune back toward the ceiling once it is crossed.
@@ -141,6 +153,14 @@ func Cost(callsInWindow, inputTokensInWindow int, cfg Config) Decision {
 // caller — recall is on the turn, unlike the write path.
 func RecallRate(recallsInWindow int, cfg Config) Decision {
 	return atMost(recallsInWindow, cfg.RecallRate, ReasonRecallRate)
+}
+
+// LoginAttempts decides whether one more login attempt for this email may
+// proceed, given how many have failed in the current window. Only failures
+// count toward the ceiling -- a user who logs in correctly every day must
+// never be at risk of tripping a limit meant for attackers.
+func LoginAttempts(failedInWindow int, cfg Config) Decision {
+	return atMost(failedInWindow, cfg.MaxLoginAttempts, ReasonLoginAttempts)
 }
 
 // PackageCap is the per-recall assembled-package claim cap, enforced
