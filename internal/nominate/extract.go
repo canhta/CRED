@@ -5,14 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 // Usage is what one model call cost, for cost attribution. Recorded even on a
 // call that is discarded (truncated or invalid), because a call that produced
 // nothing usable still spent tokens.
+//
+// Wall is the wall-clock of the single Generate call, measured by the Extractor
+// around the boundary — the provider does not report it. It is the third cost
+// dimension the PRD names (inference calls, tokens, wall-clock).
 type Usage struct {
 	InputTokens  int
 	OutputTokens int
+	Wall         time.Duration
 }
 
 // StopLength is the stop reason that means the model ran out of output budget.
@@ -32,10 +38,17 @@ type Model interface {
 	Generate(ctx context.Context, prompt string, schema []byte) (raw []byte, stopReason string, usage Usage, err error)
 }
 
-// UsageSink records model cost. The ledger the worker-ops spike specifies lives
-// above this package; this is the hook it attaches to. A nil sink is fine.
+// UsageSink records model cost. The ledger lives above this package (in the
+// store, keyed per principal and per scope); this is the hook it attaches to. A
+// nil sink is fine.
+//
+// Record is handed the Input as well as the Usage so the sink can attribute cost
+// to the principal and scope that occasioned the call — the per-principal,
+// per-scope attribution PRD section 8 requires. nominate still may not reach the
+// store (depguard forbids it, L2): the sink is an interface implemented on the
+// other side of the boundary and passed in.
 type UsageSink interface {
-	Record(ctx context.Context, u Usage)
+	Record(ctx context.Context, in Input, u Usage)
 }
 
 // Extractor is the production Nominator: it prompts a Model, gates the response
@@ -72,9 +85,13 @@ func (e *Extractor) Nominate(ctx context.Context, in Input) ([]Candidate, error)
 	}
 
 	for attempt := 0; attempt < attempts; attempt++ {
+		start := time.Now()
 		raw, stop, usage, err := e.model.Generate(ctx, prompt, schema)
+		usage.Wall = time.Since(start) // the provider does not report wall-clock
 		if e.usage != nil {
-			e.usage.Record(ctx, usage) // record even on failure — it still cost tokens
+			// Attribute to the principal and scope in Input, and record even on
+			// failure — a truncated or errored call still spent tokens.
+			e.usage.Record(ctx, in, usage)
 		}
 		if err != nil {
 			if ctx.Err() != nil {

@@ -36,6 +36,25 @@ const (
 	AttrEmbeddingModel = "cred.embedding.model_id"
 	AttrSchemaVersion  = "cred.schema.version"
 
+	// Usage and limits (PRD section 8). Scope and usage-kind are CRED's own
+	// namespace; token counts use the gen_ai.* semantic conventions, which is
+	// why those names live here — the conventions have no stable release and
+	// have already renamed fields, so a spec bump is a one-file diff.
+	AttrScopeKind    = "cred.scope.kind"
+	AttrScopeValue   = "cred.scope.value"
+	AttrUsageKind    = "cred.usage.kind"
+	AttrDeniedReason = "cred.usage.denied_reason"
+	AttrQuotaState   = "cred.usage.remaining"
+	AttrScopeLive    = "cred.scope.live_claims"
+	AttrPrunedCount  = "cred.usage.pruned"
+
+	AttrInferenceCalls = "gen_ai.usage.calls"
+	//nolint:gosec // G101: a gen_ai token-count attribute name, not a credential.
+	AttrInputTokens = "gen_ai.usage.input_tokens"
+	//nolint:gosec // G101: a gen_ai token-count attribute name, not a credential.
+	AttrOutputTokens = "gen_ai.usage.output_tokens"
+	AttrWallMS       = "cred.usage.wall_ms"
+
 	// Correlation fields, hex-encoded W3C, snake_case. That format is what
 	// Tempo, Loki, Jaeger and Honeycomb auto-link on.
 	AttrTraceID = "trace_id"

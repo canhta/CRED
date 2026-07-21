@@ -49,7 +49,9 @@ func runServe(ctx context.Context, args []string, cfg config.Config,
 	fmt.Fprintf(stderr, "cred %s  mcp stdio  2 tools (recall, remember)  %d claims, %d evidence\n",
 		mcpsrv.Version, claims, evidence)
 
-	svc := recall.New(st, emb, count)
+	// The recall budget (PRD 8) is enforced on the served path: the per-principal
+	// rate, the server-side package cap, and per-recall cost attribution.
+	svc := recall.New(st, emb, count).WithLimits(cfg.Limits, st)
 	// The remember tool is deterministic attestation — no key required, so it is
 	// always registered. Automatic nomination is a separate process (`cred
 	// curate`) driven by a hook, not by this server.

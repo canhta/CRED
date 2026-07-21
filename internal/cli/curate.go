@@ -36,28 +36,32 @@ func runCurate(ctx context.Context, args []string, cfg config.Config, log *slog.
 	}
 	defer func() { _ = emb.Close() }()
 
-	nom, err := newNominator(cfg, log)
+	nom, err := newNominator(cfg, st, log)
 	if err != nil {
 		return err
 	}
 
 	exec := newExecutor(st, emb, log)
 	rec := curate.NewReconciler(st, log)
+	// The section-8 write-path controls: the contribution-quota/cost-ceiling gate
+	// and the scope-growth pruner, both over the resolved policy.
+	limiter := curate.NewLimiter(st, cfg.Limits, log)
+	pruner := curate.NewPruner(st, cfg.Limits, log)
 
-	// The worker enqueues its own dedup passes after a write, so it needs an
-	// insert handle in addition to the worker client. Both share the pool.
+	// The worker enqueues its own dedup and prune passes after a write, so it
+	// needs an insert handle in addition to the worker client. Both share the pool.
 	queue, err := st.RiverInsertClient()
 	if err != nil {
 		return fmt.Errorf("curate: %w", err)
 	}
 
-	workers := curate.Register(nom, exec, rec, queue, log)
+	workers := curate.Register(nom, exec, rec, pruner, limiter, queue, log)
 	client, err := st.RiverWorkerClient(workers, log)
 	if err != nil {
 		return fmt.Errorf("curate: %w", err)
 	}
 
-	fmt.Fprintf(stderr, "cred curate  workers: nominate, dedup  model %s\n", modelLabel(cfg))
+	fmt.Fprintf(stderr, "cred curate  workers: nominate, dedup, prune  model %s\n", modelLabel(cfg))
 
 	// ctx is cancelled by the signal handler in main. Start returns once the
 	// client is running; the worker keeps going until ctx is done, then Stop

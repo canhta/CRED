@@ -107,6 +107,7 @@ hook plus a background worker, not part of `serve`.
 | `cred curate` | Run the background worker: nominate off the turn (needs a key), then deduplicate |
 | `cred log` | Show recent writes — live, superseded, or forgotten (D-016) |
 | `cred forget <id>` | Reverse a write by expiring its claim (D-016) |
+| `cred usage` | Show per-principal quota state before it is hit, and per-scope cost (section 8) |
 | `cred serve` | Run the MCP server over stdio (`recall` + `remember`) |
 | `cred doctor` | Check the installation; every failure names its fix |
 
@@ -131,6 +132,16 @@ Every variable has a working default, so the commands above need no `.env`.
 | `CRED_AUTO_CAPTURE` | `true` | Automatic nomination on `capture`; opt out with `false` |
 | `CRED_LLM_API_KEY` | — | Model key for `cred curate` (falls back to `ANTHROPIC_API_KEY`) |
 | `CRED_LLM_MODEL` | `claude-opus-4-8` | Model id the nominator uses |
+| `CRED_CONTRIBUTION_QUOTA` | `120` | Accepted claims per principal per window (section 8) |
+| `CRED_COST_MAX_CALLS` | `500` | Inference calls per principal per window |
+| `CRED_COST_MAX_TOKENS` | `2000000` | Input tokens per principal per window |
+| `CRED_RECALL_RATE` | `120` | Recalls per principal per window |
+| `CRED_SCOPE_CLAIM_CEILING` | `5000` | Live claims per scope before pruning bites |
+
+The usage limits ship on by default with working ceilings; a non-positive
+override disables that one control, and the windows
+(`CRED_CONTRIBUTION_WINDOW`, `CRED_COST_WINDOW`, `CRED_RECALL_WINDOW`) accept a
+Go duration such as `1h`.
 
 There is deliberately no `.env` file and no `.env.example`. Every variable has a
 working default, the binary loads no dotenv file, and a `.env.example` you must
@@ -147,11 +158,12 @@ comment is a law that will be broken by someone in a hurry.
 ```
 main.go                    thin: signals, calls internal/cli
 internal/
-  cli/                     migrate, seed, recall, remember, capture, curate, log, forget, serve, doctor
+  cli/                     migrate, seed, recall, remember, capture, curate, log, forget, usage, serve, doctor
   config/                  CRED_* resolution
   claim/                   Claim, Evidence, Principal, ACL, Interval
   temporal/                bi-temporal algebra. PURE
   acl/                     ACL intersection algebra. PURE
+  limit/                   usage-and-limits policy (section 8). PURE
   recall/                  retrieval orchestration, RRF fusion
   seed/                    documentation chunking and ingestion
   nominate/                the LLM boundary: Nominator + fake + Anthropic adapter
@@ -167,9 +179,12 @@ internal/
 
 Three of these are load-bearing rather than tidy:
 
-**`internal/temporal` and `internal/acl` are pure.** They import no database
-driver and take no connection. `depguard` fails the build if that changes, and
-the rule is verified against a deliberate bad import rather than assumed.
+**`internal/temporal`, `internal/acl`, `internal/anchor` and `internal/limit`
+are pure.** They import no database driver and take no connection — the temporal
+algebra, the ACL intersection, the L3 anchor ladder, and the section-8 limit
+policy all decide over values, and the store only supplies them. `depguard` fails
+the build if that changes, and the rule is verified against a deliberate bad
+import rather than assumed.
 
 **L5 is never a SQL predicate.** No exported function in `internal/store/pg`
 takes a principal. The store returns rows; `internal/acl` computes
@@ -253,6 +268,37 @@ cred curate                          # drains the queue; nominate off the turn, 
 This is a documented example, not a shipped harness: the trigger model and the
 `CRED_AUTO_*` opt-out are the parts CRED provides; wiring them into a specific
 agent is one settings file.
+
+### Usage limits (a security control first)
+
+Shared memory with unbounded per-principal write access is a poisoning vector,
+not merely a capacity problem — so all four of PRD section 8's limits ship on by
+default, enforced server-side, keyed per principal (and per scope where it
+applies). The policy is pure, testable Go in `internal/limit`; Postgres stores
+the counters and the store only counts, never decides — the same purity boundary
+`internal/temporal` and `internal/acl` hold, enforced by `depguard`.
+
+| Limit | What it bounds | Where it is enforced |
+|---|---|---|
+| **Contribution quota** | Accepted claims per principal per window | The nominate worker, before an LLM call. The backstop dedup cannot be: a near-duplicate flood just under the dedup threshold is still one accepted claim each, and this counts them |
+| **Cost attribution + ceiling** | Inference calls, tokens, and wall-clock, per principal and per scope | Recorded at the nominate boundary through the `UsageSink`; the ceiling is checked in the worker before spending another token |
+| **Recall budget** | Recall rate and assembled-package size, per principal | `recall`, before retrieval, protecting tail latency from a recall loop |
+| **Scope growth bound** | Live claims per scope | A prune worker: over the ceiling, pruning cuts back harder the further over it is — growth bounded by policy, not by hope |
+
+Exhaustion is **loud, never a silent drop.** Because the write path runs off the
+turn (D-017), a contribution denial cannot surface as a return value, so it is
+recorded as a `denied` row in the usage ledger and logged at `warn` with the
+machine reason — a silent drop there is exactly how a poisoning attempt would
+hide (L8). A recall denial is on the turn, so it is a loud, typed error the
+caller sees in-band. `cred usage` shows each principal's remaining headroom
+*before* a limit is hit, plus the per-scope inference cost that answers "which
+teams actually use this" — the founder-facing question no competitor exposes.
+
+The cost ceiling is a **calls-and-tokens ceiling, not a USD ceiling**: it bounds
+inference volume per window, which is the lever CRED controls; converting that to
+a dollar figure needs per-model pricing CRED does not carry. Usage is exported as
+structured, OTel-named `slog` records; a span exporter is not yet wired (see
+[what is not built](#what-is-not-built-yet)).
 
 ## Verified results
 
@@ -404,17 +450,13 @@ Named explicitly rather than left silent.
 - **Streamable HTTP transport, and OAuth.** stdio only. The packaging spike
   makes Streamable HTTP primary for a team deployment; one local principal does
   not exercise it.
-- **OpenTelemetry.** `internal/obs` holds the attribute constants and the `slog`
-  setup. No spans are emitted and no exporter is wired.
-- **Usage limits.** Contribution quota, cost attribution, recall budget per
-  principal, and scope growth bounds. The write path exists now, so these are
-  the next security control to add: shared memory with unbounded per-principal
-  write access is a poisoning vector. The `nominate` boundary already exposes a
-  `UsageSink` hook for the cost ledger; nothing is wired to it yet.
-- **A durable cost ceiling.** `internal/nominate` records token usage per call
-  through `UsageSink`, but there is no ledger and no hard USD ceiling enforced at
-  job dispatch. Until there is, `cred curate` will call the model as often as the
-  queue asks it to.
+- **OpenTelemetry spans and an exporter.** `internal/obs` holds every attribute
+  name as a constant, and usage is emitted as structured `slog` records keyed on
+  those names (the write-path denial, the prune, the recall). What is not wired
+  is a span exporter or a metrics provider: the telemetry is structured and
+  OTel-named, but nothing ships it to a collector yet. This is the honest state
+  of "exported through OpenTelemetry" — the names and the records exist; the
+  transport does not.
 - **`squawk` migration linting, `govulncheck`, release automation, and the
   published container image.** CI runs lint, the two-assertion CGO guard, unit,
   integration, and race.

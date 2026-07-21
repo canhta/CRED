@@ -20,6 +20,7 @@ import (
 	"github.com/canhta/cred/internal/config"
 	"github.com/canhta/cred/internal/embed"
 	"github.com/canhta/cred/internal/embed/wordpiece"
+	"github.com/canhta/cred/internal/limit"
 	"github.com/canhta/cred/internal/recall"
 	"github.com/canhta/cred/internal/seed"
 	"github.com/canhta/cred/internal/store/pg"
@@ -367,4 +368,51 @@ func TestSchemaRejectsAnUnnormalizedVector(t *testing.T) {
 func testLogger(t *testing.T) *slog.Logger {
 	t.Helper()
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+// TestRecallBudgetDeniesAndRecords is the read-path half of section 8: an agent
+// calling recall in a loop is rate-limited per principal, protecting tail
+// latency, and the denial is loud — a synchronous, typed BudgetError, since
+// recall is on the turn (unlike the write path's recorded 'denied' event). Every
+// admitted recall is recorded for cost attribution, so the counter the limit
+// decides over is the same one the recall wrote.
+func TestRecallBudgetDeniesAndRecords(t *testing.T) {
+	st := openTestStore(t)
+	e := newEmbedder(t)
+	tok, err := wordpiece.New()
+	require.NoError(t, err)
+	count := func(s string) int { return len(tok.Encode(s)) }
+
+	// A fresh principal so the recall window is this test's alone. Recall's
+	// counter lives in usage_events, which has no principals FK, so the principal
+	// need not be a grantable identity here.
+	principal := claim.PrincipalID(fmt.Sprintf("recall-budget-%d", time.Now().UnixNano()))
+	cfg := limit.Config{
+		RecallRate:       2,
+		RecallWindow:     time.Hour,
+		MaxPackageClaims: 5,
+	}
+	svc := recall.New(st, e, count).WithLimits(cfg, st)
+
+	now := time.Now().UTC()
+	req := recall.Request{Query: "anything at all", Principal: principal, Limit: 3, Now: now}
+
+	// Two recalls are admitted (rate 2). They may return nothing — the store need
+	// not hold matching claims for the budget to apply.
+	for i := 0; i < 2; i++ {
+		_, admitErr := svc.Recall(t.Context(), req)
+		require.NoError(t, admitErr, "recall %d was within budget and must be admitted", i)
+	}
+
+	// Both were recorded for cost attribution.
+	recalls, err := st.RecallsInWindow(t.Context(), principal, limit.WindowStart(now, cfg.RecallWindow))
+	require.NoError(t, err)
+	require.Equal(t, 2, recalls, "each admitted recall must be recorded for cost attribution")
+
+	// The third is over the rate: a loud, typed denial, not a silent empty result.
+	_, denyErr := svc.Recall(t.Context(), req)
+	require.Error(t, denyErr, "the over-budget recall must be denied, not silently served empty")
+	be, ok := recall.AsBudgetError(denyErr)
+	require.True(t, ok, "a budget denial must be a typed BudgetError the caller can surface")
+	require.Equal(t, limit.ReasonRecallRate, be.Reason)
 }

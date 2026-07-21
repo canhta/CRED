@@ -26,6 +26,7 @@ import (
 	"github.com/canhta/cred/internal/config"
 	"github.com/canhta/cred/internal/curate"
 	"github.com/canhta/cred/internal/embed"
+	"github.com/canhta/cred/internal/limit"
 	"github.com/canhta/cred/internal/nominate"
 	"github.com/canhta/cred/internal/store/pg"
 )
@@ -75,15 +76,18 @@ func newEmbedder(t *testing.T) *embed.BGE {
 	return e
 }
 
-// startWorker builds and starts the curate worker with the given nominator.
-func startWorker(t *testing.T, st *pg.Store, nom nominate.Nominator) {
+// startWorker builds and starts the curate worker with the given nominator and
+// usage-limit policy. Pass limit.Defaults() when limits should not interfere.
+func startWorker(t *testing.T, st *pg.Store, nom nominate.Nominator, cfg limit.Config) {
 	t.Helper()
 	emb := newEmbedder(t)
 	exec := curate.NewExecutor(st, emb, testLogger())
 	rec := curate.NewReconciler(st, testLogger())
+	limiter := curate.NewLimiter(st, cfg, testLogger())
+	pruner := curate.NewPruner(st, cfg, testLogger())
 	q, err := st.RiverInsertClient()
 	require.NoError(t, err)
-	workers := curate.Register(nom, exec, rec, q, testLogger())
+	workers := curate.Register(nom, exec, rec, pruner, limiter, q, testLogger())
 	client, err := st.RiverWorkerClient(workers, testLogger())
 	require.NoError(t, err)
 
@@ -123,7 +127,7 @@ func TestEnqueueNominateWritesClaimWithEvidence(t *testing.T) {
 	marker := fmt.Sprintf("curate-int-%d", time.Now().UnixNano())
 	line := "the deploy step " + marker + " runs migrations before serving"
 
-	startWorker(t, st, &nominate.Fake{Kind: claim.KindConvention})
+	startWorker(t, st, &nominate.Fake{Kind: claim.KindConvention}, limit.Defaults())
 
 	q, err := st.RiverInsertClient()
 	require.NoError(t, err)
@@ -161,7 +165,7 @@ func TestDedupSupersedesDuplicateWrites(t *testing.T) {
 	stmtA := "the cache TTL " + marker + " is five minutes"
 	stmtB := "the   cache ttl " + marker + " IS five minutes"
 
-	startWorker(t, st, &nominate.Fake{Kind: claim.KindConstraint})
+	startWorker(t, st, &nominate.Fake{Kind: claim.KindConstraint}, limit.Defaults())
 	q, err := st.RiverInsertClient()
 	require.NoError(t, err)
 
@@ -199,4 +203,152 @@ func TestDedupSupersedesDuplicateWrites(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatal("dedup did not collapse the duplicate pair within the deadline")
+}
+
+// insertPrincipal adds a grantable principal so the write path's claim_acl FK is
+// satisfied for a test-isolated identity. Using a fresh principal per test keeps
+// the contribution-window count independent of the shared "local" principal that
+// every other test writes as.
+func insertPrincipal(t *testing.T, st *pg.Store, id string) {
+	t.Helper()
+	_, err := st.Pool().Exec(t.Context(),
+		`INSERT INTO principals (id, kind, display_name) VALUES ($1, 'agent', $1)
+		 ON CONFLICT (id) DO NOTHING`, id)
+	require.NoError(t, err)
+}
+
+// TestContributionQuotaDeniesLoudly is the section-8 security control under the
+// off-the-turn write path (D-017): once a principal is at its contribution
+// quota, the next automatic write is refused — and the refusal is loud, not a
+// silent drop. The refused claim never lands, and a 'denied' row is recorded so
+// the exhaustion is queryable (`cred usage`). A silent drop here is exactly how
+// a poisoning attempt would hide (L8), which is why this is a security test
+// first and a capacity test second.
+func TestContributionQuotaDeniesLoudly(t *testing.T) {
+	st := openStore(t)
+	marker := fmt.Sprintf("quota-int-%d", time.Now().UnixNano())
+	principal := "quota-p-" + marker
+	insertPrincipal(t, st, principal)
+
+	lineA := "the alpha " + marker + " convention is to fail closed"
+	lineB := "the bravo " + marker + " convention is to log identifiers only"
+
+	// Quota of one accepted claim; every other control disabled so this test
+	// isolates the contribution quota. The fake nominator calls no model, so no
+	// inference cost is recorded and the cost ceiling is irrelevant regardless.
+	cfg := limit.Config{
+		ContributionQuota:  1,
+		ContributionWindow: time.Hour,
+	}
+	startWorker(t, st, &nominate.Fake{Kind: claim.KindConvention}, cfg)
+
+	q, err := st.RiverInsertClient()
+	require.NoError(t, err)
+	enqueue := func(line string) {
+		require.NoError(t, curate.EnqueueNominate(t.Context(), q, curate.NominateArgs{
+			Source: line + "\n", SourceKind: "document",
+			Repo: "quota-repo-" + marker, Path: "notes.md", BaseLine: 1,
+			ScopeKind: "repository", ScopeValue: "quota-scope-" + marker,
+			Principals: []string{principal}, Trigger: "turn",
+		}))
+	}
+
+	// First contribution lands (accepted == 0 < quota 1).
+	enqueue(lineA)
+	waitForWrite(t, st, "alpha "+marker)
+
+	// Second contribution is over quota (accepted == 1 >= quota 1): it must be
+	// denied and recorded, and its claim must never land.
+	enqueue(lineB)
+
+	since := time.Now().Add(-time.Hour)
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		denied, err := st.DeniedInWindow(t.Context(), claim.PrincipalID(principal), since)
+		require.NoError(t, err)
+		if denied >= 1 {
+			// The denial is on the record. Now assert the refused write did not
+			// land — the claim was denied, not merely deduped later.
+			entries, err := st.RecentWrites(t.Context(), 200)
+			require.NoError(t, err)
+			for _, e := range entries {
+				require.NotContains(t, e.Statement, "bravo "+marker,
+					"a denied contribution must never reach the store")
+			}
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatal("the over-quota contribution was not denied-and-recorded within the deadline")
+}
+
+// TestScopeGrowthPrunes exercises the scope-growth bound directly against the
+// store: a scope over its ceiling is pruned back, more aggressively the further
+// over it is, and the pruned claims are expired (not deleted) with reason
+// 'pruned'. Growth is bounded by policy, not by hope.
+func TestScopeGrowthPrunes(t *testing.T) {
+	st := openStore(t)
+	emb := newEmbedder(t)
+	marker := fmt.Sprintf("prune-int-%d", time.Now().UnixNano())
+	scope := claim.Scope{Kind: claim.ScopeRepo, Value: "prune-scope-" + marker}
+
+	// Write five claims into one scope through the real executor, so the
+	// embeddings are real and normalized and the rows are indistinguishable from
+	// a production write.
+	exec := curate.NewExecutor(st, emb, testLogger())
+	var source string
+	var cands []nominate.Candidate
+	for i := 0; i < 5; i++ {
+		line := fmt.Sprintf("prune line %d %s holds a distinct fact", i, marker)
+		source += line + "\n"
+		cands = append(cands, nominate.Candidate{
+			Kind:      claim.KindReference,
+			Statement: fmt.Sprintf("prune claim %d %s", i, marker),
+			Quote:     line,
+			// Confidence descends so the prune order (lowest first) is defined and
+			// the survivors are the highest-confidence claims.
+			Confidence: 0.5 + float64(i)*0.05,
+		})
+	}
+	res, err := exec.WriteCandidates(t.Context(), nominate.Input{
+		Source: source, SourceKind: claim.SourceDocument,
+		Repo: "prune-repo-" + marker, Path: "facts.md", BaseLine: 1,
+		Scope: scope, Principals: []claim.PrincipalID{"local"},
+	}, cands)
+	require.NoError(t, err)
+	require.Len(t, res.Written, 5, "all five distinct claims should have been written")
+
+	live, err := st.ScopeClaimCount(t.Context(), scope)
+	require.NoError(t, err)
+	require.Equal(t, 5, live)
+
+	// Ceiling 3, aggressiveness 0.5: over=2, headroom=ceil(1.0)=1, target=3.
+	// Pruning three leaves two — below the ceiling, with headroom.
+	pruner := curate.NewPruner(st, limit.Config{ScopeClaimCeiling: 3, PruneAggressiveness: 0.5}, testLogger())
+	rep, err := pruner.Prune(t.Context(), scope)
+	require.NoError(t, err)
+	require.Equal(t, 5, rep.Live)
+	require.Equal(t, 3, rep.Pruned, "prune must cut the overage plus headroom")
+
+	after, err := st.ScopeClaimCount(t.Context(), scope)
+	require.NoError(t, err)
+	require.Equal(t, 2, after, "the scope must be pruned back below its ceiling")
+
+	// The pruned claims are expired with reason 'pruned', not deleted: they still
+	// appear in the write log, closed.
+	entries, err := st.RecentWrites(t.Context(), 200)
+	require.NoError(t, err)
+	var pruned int
+	for _, e := range entries {
+		if strings.Contains(e.Statement, marker) && e.SupersededAt != nil &&
+			e.SupersedeReason == pg.SupersedeReasonPruned {
+			pruned++
+		}
+	}
+	require.Equal(t, 3, pruned, "pruned claims must be expired with reason 'pruned', not deleted")
+
+	// A second pass with the scope now under the ceiling prunes nothing.
+	rep2, err := pruner.Prune(t.Context(), scope)
+	require.NoError(t, err)
+	require.Zero(t, rep2.Pruned, "a scope under its ceiling is left alone")
 }

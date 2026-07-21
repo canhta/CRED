@@ -79,13 +79,15 @@ linters:
             - "**/internal/temporal/**"
             - "**/internal/acl/**"
             - "**/internal/anchor/**"
+            - "**/internal/limit/**"
           deny:
             - pkg: "github.com/jackc/pgx"
               desc: >-
-                Temporal, ACL, and anchor algebra must be pure. Postgres stores
-                and filters; it does not decide. The L3 invalidation decision is
-                deterministic and testable here; persisting it lives in curate.
-                See testing-strategy.md.
+                Temporal, ACL, anchor, and limit policy must be pure. Postgres
+                stores and counts; it does not decide. The quota, cost-ceiling,
+                recall-budget, and prune-aggressiveness decisions are
+                deterministic and testable here; persisting the counters lives
+                in the store. See testing-strategy.md.
             - pkg: "database/sql"
               desc: "Same law."
             - pkg: "github.com/canhta/cred/internal/store"

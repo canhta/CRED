@@ -1412,3 +1412,53 @@ formatting-only re-seed churns claims even though `cred reanchor` on the same
 change would not. Re-anchoring is the L3-correct invalidation; unifying the two
 so the seed path also decides on tiers 1–2 is future work, and until then
 acceptance criterion 4 is met via `reanchor`, not via re-seed.
+
+---
+
+## D-019 — Usage limits are a poisoning defence, and a denial is never silent
+
+- **Date:** 2026-07-21
+- **Status:** Decided
+- **Evidence:** PRD section 8; [how-they-operate.md](evidence/how-they-operate.md)
+
+### Decision
+
+The four section-8 limits ship on by default (zero-config), enforced
+server-side, keyed per principal and per scope. They are built as security
+controls first — the automatic write path (D-017) writes every third turn, so
+unbounded per-principal write access is a poisoning vector, not merely a
+capacity concern.
+
+### The three decisions worth recording
+
+- **A denial is recorded, never dropped.** Under the off-the-turn write path a
+  quota denial cannot be a return value the caller sees, so it is written to the
+  `usage_events` ledger as a `denied` row and logged at `warn` with the machine
+  reason. A silent drop is how a poisoning attempt hides (L8); exhaustion is
+  loud by construction. A recall denial is on the turn, so it is a typed error
+  surfaced in-band.
+- **The usage ledger has no foreign key to `principals`.** A denial must be
+  recordable for *any* principal id, including one that does not resolve —
+  accounting is not an access surface, and refusing to record an unknown
+  principal would reopen the silent-drop hole. This is a deliberate inversion of
+  the usual referential-integrity default.
+- **The cost ceiling is calls and tokens, not currency.** CRED carries no
+  per-model pricing, so a USD ceiling would be a number it cannot honestly
+  compute. Calls and tokens are what it measures; the operator converts.
+
+### Where the store-returns-rows law bit
+
+Contribution counting is done in SQL against a Go-computed half-open window
+cutoff, never as a `WHERE count >= quota` predicate. Every ceiling comparison
+lives in pure `internal/limit` (on the depguard pure-algebra boundary with
+`temporal`, `acl`, `anchor`); Postgres counts, Go decides. The contribution
+count includes superseded rows on purpose, so dedup cannot discount the very
+flood the quota exists to backstop.
+
+### Honest gap
+
+Usage is exported as structured `slog` records using OTel-named attribute
+constants, but **no OTel span exporter is wired yet** — there was none before
+this work either. PRD section 8 says "exported through OpenTelemetry"; that is
+the attribute vocabulary today, not a running exporter. Recorded rather than
+overclaimed.

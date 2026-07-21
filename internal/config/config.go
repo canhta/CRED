@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
+
+	"github.com/canhta/cred/internal/limit"
 )
 
 // DefaultDatabaseURL matches the compose file, so `cred` run beside
@@ -60,6 +63,13 @@ type Config struct {
 	// LLMModel is the model id the nominator uses. Defaults to the current
 	// most-capable Anthropic model; overridable for cost or availability.
 	LLMModel string
+
+	// Limits is the usage-and-limits policy (PRD 8). It ships with working
+	// defaults (limit.Defaults), so the four controls are on out of the box with
+	// no configuration — a limit that has to be configured to exist is off on
+	// first run. Each ceiling is overridable through a CRED_* variable; a
+	// non-positive override disables that one control.
+	Limits limit.Config
 }
 
 // Load resolves configuration from the environment.
@@ -93,7 +103,53 @@ func Load() (Config, error) {
 		}
 		c.AutoCapture = b
 	}
+
+	c.Limits = limit.Defaults()
+	if err := applyLimitOverrides(&c.Limits); err != nil {
+		return Config{}, err
+	}
 	return c, nil
+}
+
+// applyLimitOverrides lets an operator retune any one section-8 ceiling without
+// a config file. Every one is optional; absent leaves the default in place.
+func applyLimitOverrides(l *limit.Config) error {
+	for _, o := range []struct {
+		key string
+		dst *int
+	}{
+		{"CRED_CONTRIBUTION_QUOTA", &l.ContributionQuota},
+		{"CRED_COST_MAX_CALLS", &l.MaxInferenceCalls},
+		{"CRED_COST_MAX_TOKENS", &l.MaxInputTokens},
+		{"CRED_RECALL_RATE", &l.RecallRate},
+		{"CRED_RECALL_MAX_CLAIMS", &l.MaxPackageClaims},
+		{"CRED_SCOPE_CLAIM_CEILING", &l.ScopeClaimCeiling},
+	} {
+		if v, ok := os.LookupEnv(o.key); ok {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("%s=%q is not an integer", o.key, v)
+			}
+			*o.dst = n
+		}
+	}
+	for _, o := range []struct {
+		key string
+		dst *time.Duration
+	}{
+		{"CRED_CONTRIBUTION_WINDOW", &l.ContributionWindow},
+		{"CRED_COST_WINDOW", &l.CostWindow},
+		{"CRED_RECALL_WINDOW", &l.RecallWindow},
+	} {
+		if v, ok := os.LookupEnv(o.key); ok {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("%s=%q is not a duration", o.key, v)
+			}
+			*o.dst = d
+		}
+	}
+	return nil
 }
 
 func env(key, fallback string) string {

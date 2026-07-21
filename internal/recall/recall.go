@@ -2,11 +2,13 @@ package recall
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/canhta/cred/internal/acl"
 	"github.com/canhta/cred/internal/claim"
+	"github.com/canhta/cred/internal/limit"
 	"github.com/canhta/cred/internal/store/pg"
 )
 
@@ -100,16 +102,64 @@ type Result struct {
 	Timings Timings
 }
 
+// Meter is the recall budget's counter and ledger: how many recalls a principal
+// has run in the window, and a place to record one that completed. It is the
+// recall-side sibling of internal/acl's Store — rows and appends, no decision.
+// internal/limit decides whether the rate is exceeded; the Meter only counts.
+type Meter interface {
+	RecallsInWindow(ctx context.Context, principal claim.PrincipalID, since time.Time) (int, error)
+	RecordRecall(ctx context.Context, principal claim.PrincipalID, wallMS int64, packageClaims int, now time.Time) error
+}
+
+// BudgetError is a recall denied by the per-principal recall budget (PRD 8).
+// Recall is on the turn, so a denial is a loud, synchronous error — the read
+// path's equivalent of the write path's recorded 'denied' event. It carries the
+// machine reason and no content, so it is safe to surface to the caller (L8).
+type BudgetError struct {
+	Reason limit.Reason
+}
+
+func (e *BudgetError) Error() string {
+	return "recall denied: per-principal budget exhausted (" + string(e.Reason) + ")"
+}
+
+// AsBudgetError reports whether err is a recall-budget denial, for a caller that
+// wants to surface the reason in-band rather than as a generic failure.
+func AsBudgetError(err error) (*BudgetError, bool) {
+	var be *BudgetError
+	if errors.As(err, &be) {
+		return be, true
+	}
+	return nil, false
+}
+
 // Service runs the retrieval pipeline.
 type Service struct {
 	store  Store
 	embed  Embedder
 	tokens TokenCounter
+
+	// limits and meter are optional. When both are set (the served and CLI
+	// paths), recall enforces the per-principal rate and package cap and records
+	// each recall for cost attribution. When unset, recall behaves exactly as
+	// before — the read path's zero-config guarantee is not regressed by a limit
+	// that has to be configured to exist.
+	limits *limit.Config
+	meter  Meter
 }
 
-// New builds a Service.
+// New builds a Service with no usage limits — the zero-config read path.
 func New(store Store, embedder Embedder, tokens TokenCounter) *Service {
 	return &Service{store: store, embed: embedder, tokens: tokens}
+}
+
+// WithLimits turns on the recall budget (PRD 8): the per-principal rate, the
+// server-side package cap, and per-recall cost attribution. It returns the
+// Service for chaining.
+func (s *Service) WithLimits(cfg limit.Config, m Meter) *Service {
+	s.limits = &cfg
+	s.meter = m
+	return s
 }
 
 // Recall retrieves the claims relevant to req.Query that req.Principal may
@@ -131,6 +181,23 @@ func (s *Service) Recall(ctx context.Context, req Request) (*Result, error) {
 	}
 	if req.Budget <= 0 {
 		req.Budget = DefaultTokenBudget
+	}
+
+	// Recall budget (PRD 8). The rate check is before any work, so a recall loop
+	// is denied cheaply and cannot itself become the tail-latency load it exists
+	// to prevent. The package cap is applied server-side regardless of what the
+	// client asked, so no caller can raise its own assembled-package ceiling.
+	if s.meter != nil && s.limits != nil {
+		n, err := s.meter.RecallsInWindow(ctx, req.Principal, limit.WindowStart(req.Now, s.limits.RecallWindow))
+		if err != nil {
+			return nil, fmt.Errorf("recall budget check: %w", err)
+		}
+		if d := limit.RecallRate(n, *s.limits); !d.Allowed {
+			return nil, &BudgetError{Reason: d.Reason}
+		}
+		if pkgCap := limit.PackageCap(*s.limits); pkgCap > 0 && req.Limit > pkgCap {
+			req.Limit = pkgCap
+		}
 	}
 
 	modelID, modelName, _, err := s.store.PresentModel(ctx)
@@ -230,6 +297,14 @@ func (s *Service) Recall(ctx context.Context, req Request) (*Result, error) {
 	res.DominantArm, res.DominantShare = SingleArmShare(fused, req.Limit)
 	res.StalenessSeconds = stalest(res.Claims, req.Now)
 	res.Timings.Total = time.Since(started)
+
+	// Cost attribution for the read path (PRD 8): wall-clock and package size,
+	// per principal. Best-effort — a successful recall must not fail because a
+	// telemetry append did, and the recall already returned its result to the
+	// caller in every meaningful sense.
+	if s.meter != nil {
+		_ = s.meter.RecordRecall(ctx, req.Principal, res.Timings.Total.Milliseconds(), len(res.Claims), req.Now)
+	}
 	return res, nil
 }
 

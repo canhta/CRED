@@ -22,6 +22,13 @@ type WriteRecord struct {
 	Embedding       []float32
 	StatementSHA256 string // hex of the normalized statement hash
 	Principals      []claim.PrincipalID
+
+	// ContributedBy is the principal the contribution quota counts against
+	// (PRD 8). Empty is allowed and means "not counted" — that is how the
+	// deterministic seed path stays exempt. It is set in the same transaction as
+	// the claim, so the quota counts exactly what committed and cannot drift from
+	// a separate ledger write.
+	ContributedBy claim.PrincipalID
 }
 
 // WriteClaim writes one claim in a single transaction: evidence, claim, the L1
@@ -92,8 +99,9 @@ func (s *Store) WriteClaim(ctx context.Context, modelID int, r WriteRecord) (cla
 	err = tx.QueryRow(ctx, `
 		INSERT INTO claims (kind, statement, scope_kind, scope_value,
 		                    valid_from, recorded_at, confidence, statement_sha256,
-		                    source_repo, source_commit, extracted_by_model, prompt_version)
-		VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10,$11)
+		                    source_repo, source_commit, extracted_by_model, prompt_version,
+		                    contributed_by)
+		VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10,$11,$12)
 		RETURNING id`,
 		string(r.Claim.Kind), r.Claim.Statement,
 		string(r.Claim.Scope.Kind), r.Claim.Scope.Value,
@@ -102,6 +110,9 @@ func (s *Store) WriteClaim(ctx context.Context, modelID int, r WriteRecord) (cla
 		// or an attestation, both of which can change — that mutability is the
 		// point (D-016), and an immutable commit hash would defeat it.
 		r.Claim.SourceRepo, "", r.Claim.ExtractedByModel, r.Claim.PromptVersion,
+		// contributed_by is the quota's counter, written in the same transaction
+		// as the claim so it commits atomically with it (PRD 8).
+		string(r.ContributedBy),
 	).Scan(&claimID)
 	if err != nil {
 		return "", translate(err)

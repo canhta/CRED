@@ -99,20 +99,21 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 		}
 
 		id, err := e.writeOne(ctx, modelID, writeInput{
-			statement:  c.Statement,
-			kind:       c.Kind,
-			scope:      in.Scope,
-			sourceKind: in.SourceKind,
-			repo:       in.Repo,
-			path:       in.Path,
-			lineStart:  span.lineStart,
-			lineEnd:    span.lineEnd,
-			evidence:   span.text,
-			anchor:     anc,
-			confidence: c.Confidence,
-			model:      nominate.PromptVersion, // the boundary that produced it
-			principals: in.Principals,
-			now:        now,
+			statement:     c.Statement,
+			kind:          c.Kind,
+			scope:         in.Scope,
+			sourceKind:    in.SourceKind,
+			repo:          in.Repo,
+			path:          in.Path,
+			lineStart:     span.lineStart,
+			lineEnd:       span.lineEnd,
+			evidence:      span.text,
+			anchor:        anc,
+			confidence:    c.Confidence,
+			model:         nominate.PromptVersion, // the boundary that produced it
+			principals:    in.Principals,
+			contributedBy: firstPrincipal(in.Principals), // the quota's counter (PRD 8)
+			now:           now,
 		})
 		if err != nil {
 			return res, err
@@ -148,20 +149,21 @@ func (e *Executor) Attest(ctx context.Context, statement, kind string, principal
 	}
 	now := time.Now().UTC()
 	return e.writeOne(ctx, modelID, writeInput{
-		statement:  statement,
-		kind:       k,
-		scope:      claim.Scope{Kind: claim.ScopeOrg, Value: "attested"},
-		sourceKind: claim.SourceAttestation,
-		repo:       "",
-		path:       "attestation",
-		lineStart:  1,
-		lineEnd:    1,
-		evidence:   statement, // the assertion is its own evidence
-		confidence: attestedConfidence,
-		model:      "attestation",
-		attestedBy: principal,
-		principals: []claim.PrincipalID{principal},
-		now:        now,
+		statement:     statement,
+		kind:          k,
+		scope:         claim.Scope{Kind: claim.ScopeOrg, Value: "attested"},
+		sourceKind:    claim.SourceAttestation,
+		repo:          "",
+		path:          "attestation",
+		lineStart:     1,
+		lineEnd:       1,
+		evidence:      statement, // the assertion is its own evidence
+		confidence:    attestedConfidence,
+		model:         "attestation",
+		attestedBy:    principal,
+		principals:    []claim.PrincipalID{principal},
+		contributedBy: principal, // an attestation counts toward the attester's quota (PRD 8)
+		now:           now,
 	})
 }
 
@@ -188,21 +190,22 @@ func parseKind(kind string) (claim.Kind, error) {
 const attestedConfidence = 0.7
 
 type writeInput struct {
-	statement  string
-	kind       claim.Kind
-	scope      claim.Scope
-	sourceKind claim.SourceKind
-	repo       string
-	path       string
-	lineStart  int
-	lineEnd    int
-	evidence   string
-	anchor     anchor.Anchor
-	confidence float64
-	model      string
-	attestedBy claim.PrincipalID
-	principals []claim.PrincipalID
-	now        time.Time
+	statement     string
+	kind          claim.Kind
+	scope         claim.Scope
+	sourceKind    claim.SourceKind
+	repo          string
+	path          string
+	lineStart     int
+	lineEnd       int
+	evidence      string
+	anchor        anchor.Anchor
+	confidence    float64
+	model         string
+	attestedBy    claim.PrincipalID
+	principals    []claim.PrincipalID
+	contributedBy claim.PrincipalID
+	now           time.Time
 }
 
 func (e *Executor) writeOne(ctx context.Context, modelID int, w writeInput) (string, error) {
@@ -249,6 +252,7 @@ func (e *Executor) writeOne(ctx context.Context, modelID int, w writeInput) (str
 		Embedding:       vecs[0],
 		StatementSHA256: hashHex(normalizeStatement(w.statement)),
 		Principals:      w.principals,
+		ContributedBy:   w.contributedBy,
 	})
 }
 

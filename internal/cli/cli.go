@@ -39,6 +39,7 @@ Commands:
   curate             Run the background worker: nominate off the turn, dedup
   log                Show recent writes (visible, per D-016)
   forget <id>        Reverse a write by expiring its claim (per D-016)
+  usage              Show per-principal quota state and per-scope cost (section 8)
   serve              Run the MCP server over stdio (recall + remember)
   doctor             Check the installation and name the fix for anything broken
 
@@ -52,6 +53,14 @@ Environment:
   CRED_AUTO_CAPTURE            Automatic nomination on capture (default true)
   CRED_LLM_API_KEY             Model key for the curate worker (or ANTHROPIC_API_KEY)
   CRED_LLM_MODEL               Model id for nomination (default claude-opus-4-8)
+  CRED_CONTRIBUTION_QUOTA      Accepted claims per principal per window (default 120)
+  CRED_COST_MAX_CALLS          Inference calls per principal per window (default 500)
+  CRED_COST_MAX_TOKENS         Input tokens per principal per window (default 2000000)
+  CRED_RECALL_RATE             Recalls per principal per window (default 120)
+  CRED_SCOPE_CLAIM_CEILING     Live claims per scope before pruning (default 5000)
+
+The usage limits (section 8) ship on by default with working ceilings; a
+non-positive override disables that one control. See them with cred usage.
 
 Reads and explicit remember need no API key. Only curate — the automatic
 nomination worker — does. Every write is visible (cred log) and reversible
@@ -120,6 +129,8 @@ func dispatch(ctx context.Context, cmd string, args []string, cfg config.Config,
 		return runLog(ctx, args, cfg, stdout)
 	case "forget":
 		return runForget(ctx, args, cfg, stdout)
+	case "usage":
+		return runUsage(ctx, args, cfg, stdout)
 	case "serve":
 		return runServe(ctx, args, cfg, log, stderr)
 	case "doctor":

@@ -45,7 +45,7 @@ func runRecall(ctx context.Context, args []string, cfg config.Config, out io.Wri
 		return err
 	}
 
-	res, err := recall.New(st, emb, count).Recall(ctx, recall.Request{
+	res, err := recall.New(st, emb, count).WithLimits(cfg.Limits, st).Recall(ctx, recall.Request{
 		Query:     query,
 		Principal: claim.PrincipalID(cfg.Principal),
 		Limit:     *limit,

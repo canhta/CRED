@@ -43,6 +43,17 @@ type DedupArgs struct{}
 // Kind names the job for River.
 func (DedupArgs) Kind() string { return "cred.dedup" }
 
+// PruneArgs is the scope-growth bound's job: check one scope's live-claim count
+// and prune it back if it is over its ceiling (PRD 8). It carries the scope a
+// write just landed in, because that is the only scope whose count changed.
+type PruneArgs struct {
+	ScopeKind  string `json:"scope_kind"`
+	ScopeValue string `json:"scope_value"`
+}
+
+// Kind names the job for River.
+func (PruneArgs) Kind() string { return "cred.prune" }
+
 func (a NominateArgs) toInput() nominate.Input {
 	ps := make([]claim.PrincipalID, len(a.Principals))
 	for i, p := range a.Principals {
@@ -69,15 +80,33 @@ func (a NominateArgs) toInput() nominate.Input {
 // only here, in the background, never on the agent's turn.
 type NominateWorker struct {
 	river.WorkerDefaults[NominateArgs]
-	nom   nominate.Nominator
-	exec  *Executor
-	queue Queue
-	log   *slog.Logger
+	nom    nominate.Nominator
+	exec   *Executor
+	limits *Limiter // nil disables the write-path quota/cost gate
+	queue  Queue
+	log    *slog.Logger
 }
 
-// Work runs the nominate → validate → write → schedule-dedup pipeline.
+// Work runs the gate → nominate → validate → write → schedule-curation pipeline.
 func (w *NominateWorker) Work(ctx context.Context, job *river.Job[NominateArgs]) error {
 	in := job.Args.toInput()
+
+	// Contribution quota and cost ceiling, before an LLM call is made (PRD 8).
+	// A denial here is loud and recorded (see Limiter.deny), never a silent drop
+	// — that loudness is what stops the off-the-turn write path from hiding a
+	// poisoning attempt (D-017, L8). It returns nil, not an error: the write was
+	// correctly refused, and a retry would only re-deny.
+	if w.limits != nil {
+		if principal := firstPrincipal(in.Principals); principal != "" {
+			ok, err := w.limits.Admit(ctx, principal, in.Scope)
+			if err != nil {
+				return err // transient counting failure: let River retry
+			}
+			if !ok {
+				return nil // denied, loudly and on the record
+			}
+		}
+	}
 
 	cands, err := w.nom.Nominate(ctx, in)
 	if err != nil {
@@ -98,9 +127,13 @@ func (w *NominateWorker) Work(ctx context.Context, job *river.Job[NominateArgs])
 	}
 
 	if len(res.Written) > 0 && w.queue != nil {
-		// Best-effort: a dedup pass that fails to enqueue is not a failed write.
-		// The next write reschedules it, and dedup is idempotent regardless.
+		// Best-effort: a curation pass that fails to enqueue is not a failed
+		// write. The next write reschedules dedup, which is idempotent, and the
+		// scope-growth bound is re-checked on the next write into the scope.
 		_ = Enqueue(ctx, w.queue, DedupArgs{})
+		_ = Enqueue(ctx, w.queue, PruneArgs{
+			ScopeKind: string(in.Scope.Kind), ScopeValue: in.Scope.Value,
+		})
 	}
 	return nil
 }
@@ -117,11 +150,33 @@ func (w *DedupWorker) Work(ctx context.Context, _ *river.Job[DedupArgs]) error {
 	return err
 }
 
-// Register builds the River worker registry for the curate process.
-func Register(nom nominate.Nominator, exec *Executor, rec *Reconciler, queue Queue, log *slog.Logger) *river.Workers {
+// PruneWorker runs the scope-growth bound over one scope.
+type PruneWorker struct {
+	river.WorkerDefaults[PruneArgs]
+	pruner *Pruner
+}
+
+// Work prunes one scope back under its ceiling if it is over.
+func (w *PruneWorker) Work(ctx context.Context, job *river.Job[PruneArgs]) error {
+	if w.pruner == nil {
+		return nil
+	}
+	_, err := w.pruner.Prune(ctx, claim.Scope{
+		Kind: claim.ScopeKind(job.Args.ScopeKind), Value: job.Args.ScopeValue,
+	})
+	return err
+}
+
+// Register builds the River worker registry for the curate process. limiter and
+// pruner may be nil — the write path then runs without the section 8 controls,
+// which is what the read-only and no-key deployments want.
+func Register(nom nominate.Nominator, exec *Executor, rec *Reconciler,
+	pruner *Pruner, limiter *Limiter, queue Queue, log *slog.Logger,
+) *river.Workers {
 	workers := river.NewWorkers()
-	river.AddWorker(workers, &NominateWorker{nom: nom, exec: exec, queue: queue, log: log})
+	river.AddWorker(workers, &NominateWorker{nom: nom, exec: exec, limits: limiter, queue: queue, log: log})
 	river.AddWorker(workers, &DedupWorker{rec: rec})
+	river.AddWorker(workers, &PruneWorker{pruner: pruner})
 	return workers
 }
 

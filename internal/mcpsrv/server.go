@@ -187,6 +187,16 @@ func (s *Server) handleRecall(ctx context.Context, _ *mcp.CallToolRequest, in Re
 		Now:       time.Now().UTC(),
 	})
 	if err != nil {
+		// A recall-budget denial is surfaced in-band with its reason (PRD 8:
+		// exhaustion is a loud, explicit denial). The reason carries no claim
+		// content — only the machine reason — so it is safe to return, unlike a
+		// raw error, which could echo restricted text.
+		if be, ok := recall.AsBudgetError(err); ok {
+			s.log.Warn("recall denied",
+				slog.String(obs.AttrPrincipalID, string(s.principal)),
+				slog.String(obs.AttrDeniedReason, string(be.Reason)))
+			return nil, RecallOutput{}, fmt.Errorf("recall denied: per-principal budget exhausted (%s)", be.Reason)
+		}
 		// Scrubbed: the error names the operation, never the content. An
 		// error that echoes restricted text is an access-control bypass
 		// wearing a diagnostic's clothes.

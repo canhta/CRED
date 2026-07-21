@@ -52,14 +52,19 @@ func newExecutor(st *pg.Store, emb *embed.BGE, log *slog.Logger) *curate.Executo
 // newNominator builds the LLM boundary for the curate worker. This is the one
 // place a key is required; if none is configured, the worker cannot nominate and
 // says so loudly rather than degrading silently.
-func newNominator(cfg config.Config, log *slog.Logger) (nominate.Nominator, error) {
+//
+// The extractor is given a store-backed UsageSink, so every model call records
+// its cost — calls, tokens, wall-clock — to the ledger, attributed to the
+// principal and scope that occasioned it (PRD 8). That is the "cost attribution
+// at the nominate boundary" the cost ceiling later reads.
+func newNominator(cfg config.Config, st *pg.Store, log *slog.Logger) (nominate.Nominator, error) {
 	model, err := nominate.NewAnthropicModel(cfg.LLMAPIKey, nominate.WithModel(cfg.LLMModel))
 	if err != nil {
 		return nil, fmt.Errorf("%w\n\n  The automatic write path calls a model. Set CRED_LLM_API_KEY\n"+
 			"  (or ANTHROPIC_API_KEY), or run the worker with CRED_AUTO_CAPTURE=false\n"+
 			"  and use `cred remember` for explicit, key-free contribution", err)
 	}
-	return nominate.NewExtractor(model, nil, log), nil
+	return nominate.NewExtractor(model, curate.NewUsageRecorder(st, log), log), nil
 }
 
 // tokenCounter returns an exact model-token count, so the recall budget is
