@@ -79,8 +79,9 @@ Two views ship today:
   result is never a silent one.
 
 The console is a compiled SPA, so build it once with `task build` (needs Node),
-which embeds it into the binary; `task dev` runs it with hot reload. Gate it with
-`CRED_WEB_TOKEN`. Access control at the API is the engine's own — the store
+which embeds it into the binary and serves it on `:8080`; `task dev` runs it with
+hot reload on the Vite dev server at `:5173` (proxying `/api` → `:8080`). Gate it
+with `CRED_WEB_TOKEN`. Access control at the API is the engine's own — the store
 returns rows and `internal/acl` decides — so the console never shows a principal
 a claim it may not read.
 

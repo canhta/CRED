@@ -54,11 +54,15 @@ but it must be built first because it is a compiled SPA.
 ```sh
 # One-time, needs Node: build the SPA and embed it into the binary.
 task build                       # → ./cred with the console baked in
-./cred web                       # http://localhost:8080
+./cred web                       # console + API on http://localhost:8080
 
-# Or, for development with hot reload (two processes, Vite proxies /api → :8080):
-task dev
+# Or, for development with hot reload (two processes):
+task dev                         # open the Vite dev server: http://localhost:5173
 ```
+
+In dev mode the console is served by Vite on `:5173` and proxies `/api` → the Go
+server on `:8080` — so open **`:5173`**, not `:8080`. The embedded build
+(`./cred web`) serves the console itself on `:8080`.
 
 A plain `go build` (step 2) still runs `cred web` — it serves the JSON API under
 `/api` and a stub page — but the full console needs `task build` or `task dev`.
