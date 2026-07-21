@@ -108,3 +108,26 @@ describe('claim navigation', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('appRoute beforeLoad guard', () => {
+  beforeEach(() => {
+    vi.mocked(getClaims).mockResolvedValue(CLAIMS);
+    vi.mocked(getClaim).mockResolvedValue(DETAIL);
+  });
+
+  it('redirects to login when principal is empty', async () => {
+    vi.mocked(getHealth).mockResolvedValue({
+      status: 'ok',
+      version: '0.1.0',
+      principal: '',
+      registration_open: false,
+    });
+
+    renderApp('/claims');
+
+    expect(await screen.findByText('Welcome back')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Sign in' }),
+    ).toBeInTheDocument();
+  });
+});
