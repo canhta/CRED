@@ -12,6 +12,7 @@ import {
 } from '@astryxdesign/core/SegmentedControl';
 import { Table, proportional, pixel } from '@astryxdesign/core/Table';
 import type { TableColumn } from '@astryxdesign/core/Table';
+import { Link } from '@astryxdesign/core/Link';
 import { useClaims } from '../api';
 import type { ClaimListItem, StatusFilter } from '../api';
 
@@ -19,17 +20,32 @@ import type { ClaimListItem, StatusFilter } from '../api';
 // index signature, so we widen it locally rather than pollute the API contract.
 type ClaimRow = ClaimListItem & Record<string, unknown>;
 
-const columns: TableColumn<ClaimRow>[] = [
-  {
-    key: 'statement',
-    header: 'Statement',
-    width: proportional(2),
-    renderCell: (claim) => (
-      <Text type="body" weight="medium" maxLines={1}>
-        {claim.statement}
-      </Text>
-    ),
-  },
+// Columns are a factory, not a const, because the statement cell navigates to
+// the claim's detail. Navigation is injected as `onOpen` rather than reached
+// for with a router hook, so ClaimsPage stays a pure component the tests can
+// render without a router context.
+function claimColumns(onOpen?: (id: string) => void): TableColumn<ClaimRow>[] {
+  return [
+    {
+      key: 'statement',
+      header: 'Statement',
+      width: proportional(2),
+      renderCell: (claim) => (
+        // The href is a real URL so the row supports middle-click and copy-link;
+        // the click itself is intercepted for in-app (SPA) navigation.
+        <Link
+          href={`/claims/${encodeURIComponent(claim.id)}`}
+          onClick={(e) => {
+            e.preventDefault();
+            onOpen?.(claim.id);
+          }}
+        >
+          <Text type="body" weight="medium" maxLines={1}>
+            {claim.statement}
+          </Text>
+        </Link>
+      ),
+    },
   {
     key: 'kind',
     header: 'Kind',
@@ -96,9 +112,10 @@ const columns: TableColumn<ClaimRow>[] = [
       </Text>
     ),
   },
-];
+  ];
+}
 
-export function ClaimsPage() {
+export function ClaimsPage({ onOpen }: { onOpen?: (id: string) => void }) {
   const [status, setStatus] = useState<StatusFilter>('all');
   const claims = useClaims({ status });
 
@@ -127,6 +144,7 @@ export function ClaimsPage() {
             isLoading={claims.isLoading}
             isError={claims.isError}
             items={claims.data?.claims ?? []}
+            onOpen={onOpen}
           />
         </LayoutContent>
       }
@@ -138,10 +156,12 @@ function ClaimsBody({
   isLoading,
   isError,
   items,
+  onOpen,
 }: {
   isLoading: boolean;
   isError: boolean;
   items: ClaimListItem[];
+  onOpen?: (id: string) => void;
 }) {
   if (isLoading) {
     return (
@@ -176,7 +196,7 @@ function ClaimsBody({
   return (
     <Table<ClaimRow>
       data={items as ClaimRow[]}
-      columns={columns}
+      columns={claimColumns(onOpen)}
       idKey="id"
       hasHover
       textOverflow="truncate"
