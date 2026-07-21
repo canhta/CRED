@@ -1,0 +1,8 @@
+# Copy to backend.hcl (gitignored) and fill in your own state bucket/table —
+# see infra/terraform/bootstrap/main.tf, whose outputs are exactly these
+# two values.
+bucket         = "cred-tfstate-<your-account-id>"
+key            = "cred/terraform.tfstate"
+region         = "<your-region>"
+dynamodb_table = "cred-tfstate-lock"
+encrypt        = true
