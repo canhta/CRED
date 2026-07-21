@@ -6,20 +6,28 @@ does.
 
 ## Current phase
 
-**Pre-implementation.** There is no product code in this repository and none
-should be added yet. Discovery is complete. One gating spike remains open.
+**Building.** Research closed under D-015
+(`docs/research/decision-log.md`, 2026-07-20): "not building leaves
+outstanding at zero," and v0 stopped being a precondition and became "a
+design check run against a working system, not a hurdle before one exists."
 
-Before writing any implementation code, check that the gate for it has actually
-cleared:
+Implementation is underway. `internal/` holds the domain, recall, curate,
+nominate, anchor, ACL, and temporal packages; `main.go` and `internal/cli`
+wire up `serve` and `curate`; `web/` is the console frontend; CI
+(`.github/workflows/ci.yml`) lints, guards CGO, and runs unit, integration,
+and race suites on every push.
+
+Gate status, carried forward so it is not re-litigated:
 
 | Gate | Where it is decided | Status |
 |---|---|---|
-| Does retrieved memory beat plain long context? | `docs/research/spikes/v0-experiment-design.md` | **Dropped, unrun** — see `docs/research/decision-log.md` D-024. The harness was built through corpus assembly and deleted before any model call |
 | Does a pure-Go embedding path exist without CGO? | `docs/research/spikes/go-embeddings-tokenizer.md` | **Cleared**, with a throughput condition |
+| Does retrieved memory beat plain long context? | `docs/research/spikes/v0-experiment-design.md` | **Dropped, unrun** — see D-024. No longer a precondition for building (D-015); it continues as an ordinary engineering question, evaluated per task shape as the system runs |
 
-If a gate fails, the correct response is to change the plan and record why —
-not to route around it. The dropped gate above was not failed; it was never
-measured, and that distinction is preserved in D-024, not smoothed over here.
+D-024's distinction still holds: the dropped gate was not failed, it was never
+measured. D-015 changed what that gate blocks, not what it found — it stopped
+requiring the measurement before code could exist, not decided the
+measurement's result.
 
 ## Non-negotiables
 
