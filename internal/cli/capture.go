@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/canhta/cred/internal/anchor"
 	"github.com/canhta/cred/internal/config"
 	"github.com/canhta/cred/internal/curate"
 )
@@ -27,6 +28,7 @@ func runCapture(ctx context.Context, args []string, cfg config.Config, stdin io.
 	baseLine := fs.Int("base-line", 1, "1-based line number of the material's first line")
 	scopeKind := fs.String("scope-kind", "repository", "organization, repository, path, or service")
 	scopeValue := fs.String("scope-value", "", "the scope value; defaults to --repo")
+	sourceKind := fs.String("source-kind", "", "document, code, or attestation; inferred from --path when empty")
 	trigger := fs.String("trigger", "tool_result", "what fired this: turn, tool_result, session_end")
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("%w: %w", ErrUsage, err)
@@ -57,6 +59,14 @@ func runCapture(ctx context.Context, args []string, cfg config.Config, stdin io.
 		sv = *repo
 	}
 
+	// An unset kind is read off the file extension, so a captured .ts span routes
+	// to the code anchorer and a .md span to the text one without the hook
+	// declaring it.
+	sk := *sourceKind
+	if sk == "" {
+		sk = string(anchor.KindForPath(*path))
+	}
+
 	st, err := openStore(ctx, cfg)
 	if err != nil {
 		return err
@@ -72,7 +82,7 @@ func runCapture(ctx context.Context, args []string, cfg config.Config, stdin io.
 
 	err = curate.EnqueueNominate(ctx, q, curate.NominateArgs{
 		Source:     source,
-		SourceKind: "document",
+		SourceKind: sk,
 		Repo:       *repo,
 		Path:       *path,
 		BaseLine:   *baseLine,

@@ -53,12 +53,14 @@ func (a Anchor) Anchored() bool {
 	return a.SymbolPath != "" && a.NodeHash != ""
 }
 
-// Source is the current, trusted text of a file, plus what kind of file it is.
-// Anchoring reads the whole file so tier 1 can be a structural path rather than
-// a line number.
+// Source is the current, trusted text of a file, plus what kind of file it is
+// and where it came from. Anchoring reads the whole file so tier 1 can be a
+// structural path rather than a line number; Path carries the extension the code
+// anchorer reads to pick a language.
 type Source struct {
 	Text string
 	Kind claim.SourceKind
+	Path string
 }
 
 // Span is a 1-based inclusive line range within a Source, plus the tier-4 hash
@@ -181,23 +183,20 @@ type Anchorer interface {
 }
 
 // For selects the anchorer for a source kind. It is the pluggable seam the
-// ladder hangs on: the code anchorer (pure-Go tree-sitter, CGO-free) drops in at
-// SourceCode without any caller changing. It does not ship in this slice — not
-// because it needs CGO (it does not), but because no code evidence is produced
-// yet and adopting a v0.x single-maintainer parser as the anchoring authority
-// needs a grammar-fidelity verification first, the same discipline applied to
-// the tokenizer before it was trusted. Until then code falls back to the text
-// anchorer, which finds no
-// heading path in Go and so records code evidence as tier-4-only rather than
-// pretending to a symbol path it cannot produce.
+// ladder hangs on: documents relocate by heading path, code by symbol path, and
+// both defer the same law to classify. Code the code anchorer does not recognize
+// degrades to tier-4-only inside it, so an unsupported language never expires a
+// claim by accident.
 //
 // ok is false for attestations: a person's assertion is its own evidence and has
 // no file span to re-anchor, so the ladder does not apply and the caller stores
 // no anchor.
 func For(kind claim.SourceKind) (Anchorer, bool) {
 	switch kind {
-	case claim.SourceDocument, claim.SourceCode:
+	case claim.SourceDocument:
 		return TextAnchorer{}, true
+	case claim.SourceCode:
+		return CodeAnchorer{}, true
 	default: // attestation
 		return nil, false
 	}

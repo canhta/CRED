@@ -1462,3 +1462,69 @@ constants, but **no OTel span exporter is wired yet** — there was none before
 this work either. PRD section 8 says "exported through OpenTelemetry"; that is
 the attribute vocabulary today, not a running exporter. Recorded rather than
 overclaimed.
+
+## D-020 — Code anchoring ships multi-language, on a ctags-style regex registry, not tree-sitter
+
+- **Date:** 2026-07-21
+- **Status:** Decided (supersedes the "code anchoring is deferred" half of D-018)
+- **Evidence:** [code-anchoring-prior-art.md](code-anchoring-prior-art.md), [code-anchoring-competitors.md](code-anchoring-competitors.md), [semantic-anchoring.md](spikes/semantic-anchoring.md)
+
+### Decision
+
+Code anchoring (L3 for `code` evidence) ships now, across many languages, on a
+**table-driven regex registry modeled on universal-ctags' optlib parsers**:
+adding a language is adding a row of patterns, not code. It runs on the stdlib
+`regexp` (RE2) — pure Go, zero CGO, no per-language dependency. A regex
+name-capture is tier 1 (a relocatable symbol path that survives line moves);
+the enclosing definition's normalized bytes are tier 2. A line matching no
+pattern, or a whole language not in the registry, degrades to tier-4-only and
+never expires a claim by accident.
+
+Default coverage: Go, TS/JS, Python, Rust, C, C++, Java, C#, Ruby, PHP, Swift,
+Kotlin, Scala, CSS, HTML — kinds (function/method, class/struct/interface/
+enum/trait, type/typedef, module/namespace, const/var, macro) drawn from ctags.
+
+### Why the registry, not the pure-Go parser D-018 cleared
+
+D-018 disproved the CGO gate: `gotreesitter` parses Go under `CGO_ENABLED=0`.
+But it is the wrong default for *breadth*. It is v0.x single-maintainer, ~10 MB
+of embedded grammars, and each language is one more grammar whose fidelity must
+be vetted — the opposite of "be dynamic, cover everything." The real world is
+C, C++, Rust, HTML, CSS and a long tail; a regex registry covers that tail as
+*data* today, where a parser covers it as *a dependency per language* later.
+
+The two are fidelity tiers, not rivals — the exact structure Sourcegraph ships
+(ctags for ~40-language breadth, SCIP/tree-sitter for per-language fidelity).
+Regex is the breadth default; pure-Go tree-sitter stays a documented, opt-in
+per-language upgrade for a language that earns the 10 MB.
+
+### What prior art forces us to say honestly
+
+The concept is **not novel**. GitHub Copilot Memory (public preview, Jan 2026)
+already stores repo facts with citations to code and validates those citations
+against the current branch before use, with a 28-day TTL. Pitching CRED as
+"first" or "unprecedented" is falsified on contact. What is genuinely unclaimed
+is the *combination*: a relocatable symbol-path anchor **plus** a normalized
+node hash that tells reformatting (expire nothing) from a semantic edit (expire
+exactly what changed), delivered open, self-hostable, deterministic, and
+inspectable. The honest frame is **reformat-immune, symbol-granular, open,
+self-hostable** — every word true — not "first."
+
+Among agent-memory systems (mem0, Letta, Zep/Graphiti, Cognee) none anchor a
+claim to a code span and expire it on a code change; Cognee anchors to
+file+line+symbol but carries no staleness. So CRED is ahead *of that category*
+while behind Copilot's closed version on the concept alone.
+
+### What we borrow
+
+SCIP's `Symbol` string — a position-free descriptor FQN — is the cleanest
+analog for tier 1, and confirms the design instinct: identity is a symbol path,
+never a line range. Graphiti's "a detector nominates, deterministic code
+decides" split is the same L2 boundary CRED already runs, now applied to code.
+
+### The one RE2 caveat carried forward
+
+RE2 has no backreferences and no lookaround. Patterns ported from ctags optlib
+that rely on either must be rewritten for RE2 before use; the shipped set is
+authored RE2-native and precision-tuned, because a false-positive anchor
+(re-validating against the wrong code) is worse than a missed one.

@@ -34,6 +34,10 @@ evidence does.
   linting, testing, and what a solo maintainer should skip.
 - [Semantic anchoring](research/spikes/semantic-anchoring.md) — L3's fingerprint
   ladder, and whether a tree-sitter binding exists for Go with `CGO_ENABLED=0`.
+- [Code anchoring prior art](research/code-anchoring-prior-art.md) — the
+  universal-ctags optlib regex model as the reference for multi-language,
+  CGO-free tier-1/tier-2 extraction, the CGO-free option landscape, and
+  per-language definition kinds.
 - [Technical decisions](research/spikes/tech-decisions.md) — language,
   datastore, queue, and the failure modes each choice implies.
 - [Language and MCP](research/spikes/tech-language-and-mcp.md) — runtime
@@ -78,6 +82,7 @@ URLs. Repository scans read actual source code rather than documentation.
 | [knowledge-decay-and-review-capacity.md](research/evidence/knowledge-decay-and-review-capacity.md) | Freshness vs findability, review capacity limits |
 | [prior-art-voluntary-curation.md](research/evidence/prior-art-voluntary-curation.md) | Whether voluntary curation sustains |
 | [adjacent-devtools-status.md](research/evidence/adjacent-devtools-status.md) | Adjacent company status scan |
+| [code-anchoring-competitors.md](research/code-anchoring-competitors.md) | Who anchors a memory to a code span and expires it on change — agent-memory, code assistants, code-intelligence identity models |
 
 ## Reading the evidence
 

@@ -110,7 +110,7 @@ func (r *Reanchorer) Reanchor(ctx context.Context, root string) (ReanchorReport,
 			WindowHash: ev.WindowHash,
 			ByteHash:   ev.ByteHash,
 		}
-		v := a.Resolve(stored, anchor.Source{Text: src, Kind: claim.SourceKind(ev.SourceKind)})
+		v := a.Resolve(stored, anchor.Source{Text: src, Kind: claim.SourceKind(ev.SourceKind), Path: ev.Path})
 
 		switch {
 		case v.Kind == anchor.Unanchored:

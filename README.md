@@ -270,6 +270,57 @@ This is a documented example, not a shipped harness: the trigger model and the
 `CRED_AUTO_*` opt-out are the parts CRED provides; wiring them into a specific
 agent is one settings file.
 
+### Code anchoring
+
+A claim drawn from a code span is anchored to the *symbol it is about*, not to a
+line range. `internal/anchor` reads the whole file, finds the enclosing
+definition, and stores two things: a relocatable symbol path (tier 1, e.g.
+`Service > handle` or `Executor.writeOne`) and a whitespace-normalized hash of
+that definition's text (tier 2). Re-anchoring at `cred reanchor` recomputes both
+against the current file. Tiers 1 and 2 agreeing means the claim survives —
+whatever happened to the bytes in between. A tier-2 change under an unchanged
+tier-1 path is a real edit to the anchored code, and expires exactly that claim.
+A tier-1 path that is gone (renamed or deleted) expires too; an ambiguous one
+expires rather than guessing. A reformat — reindent, added blank lines,
+whitespace churn — leaves both tiers untouched and expires nothing.
+
+Language detection is a table-driven regex registry modeled on universal-ctags'
+optlib parsers: adding a language is adding a row of patterns, not code. It runs
+on Go's standard `regexp` (RE2) — pure Go, no CGO, no per-language dependency,
+no grammar blobs. Shipped coverage:
+
+Go, TypeScript/JavaScript, Python, Rust, C, C++, Java, C#, Ruby, PHP, Swift,
+Kotlin, Scala, and CSS/SCSS/LESS/SASS.
+
+HTML is recognized but deliberately degrades to a raw hash: a line-oriented
+regex cannot bound an element's extent with enough precision, and a wrong anchor
+is worse than none. That is the general rule — **an unrecognized language, or
+a span that matches no pattern, degrades to a raw byte hash (tier 4) rather than
+inventing a symbol anchor that would re-validate a claim against the wrong
+code.** Tier 4 never expires a claim on its own; a language CRED cannot parse
+structurally simply carries no code-aware staleness until someone adds its
+table.
+
+This is not a first. GitHub Copilot Memory already validates code citations
+against the current branch. CRED's position is narrower and precise:
+reformat-immune, symbol-granular, open-source, self-hostable, and — because
+the whole decision is a pure function of two hashes and a path — deterministic
+and inspectable. The reason a claim survived or expired is a diff, not a score.
+
+End to end:
+
+```sh
+cred capture --path src/service.ts --repo "$PWD" < span.txt  # kind inferred
+cred curate            # nominate off the turn (needs a key)
+# ... edit src/service.ts ...
+cred reanchor "$PWD"   # reformatting survives; a real edit expires that claim
+```
+
+`cred capture` infers the source kind from the file extension (`--source-kind`
+overrides it); reformatting `service.ts` and re-running `reanchor` reports the
+claim still valid, while editing the body of the anchored function expires that
+one claim and leaves the rest.
+
 ### Usage limits (a security control first)
 
 Shared memory with unbounded per-principal write access is a poisoning vector,

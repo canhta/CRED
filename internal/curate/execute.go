@@ -92,7 +92,7 @@ func (e *Executor) WriteCandidates(ctx context.Context, in nominate.Input, cands
 		var anc anchor.Anchor
 		if a, ok := anchor.For(in.SourceKind); ok {
 			anc = a.Compute(
-				anchor.Source{Text: in.Source, Kind: in.SourceKind},
+				anchor.Source{Text: in.Source, Kind: in.SourceKind, Path: in.Path},
 				anchor.Span{LineStart: span.lineStart, LineEnd: span.lineEnd, ByteHash: hashHex(span.text)},
 			)
 		}
