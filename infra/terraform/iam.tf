@@ -62,7 +62,17 @@ resource "aws_iam_role" "gha_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
+        }
+        # StringLike, not StringEquals, on sub: a repo or owner with any
+        # rename history gets a sub claim of "repo:owner@id/repo@id:ref:..."
+        # instead of the plain "repo:owner/repo:ref:...", confirmed via
+        # CloudTrail against this repo (previously named SHIFT). Both forms
+        # are matched so this works whether or not that history exists.
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repo}:ref:refs/heads/main",
+            "repo:${split("/", var.github_repo)[0]}@*/${split("/", var.github_repo)[1]}@*:ref:refs/heads/main",
+          ]
         }
       }
     }]
