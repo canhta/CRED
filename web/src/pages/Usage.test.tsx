@@ -136,4 +136,16 @@ describe('UsagePage', () => {
     expect(screen.queryByText('Scope growth')).not.toBeInTheDocument();
     expect(getUsageOrg).not.toHaveBeenCalled();
   });
+
+  it('shows an error state, not a perpetual spinner, when the org-wide report fails to load for an admin', async () => {
+    vi.mocked(getHealth).mockResolvedValue(ADMIN);
+    vi.mocked(getUsageOrg).mockRejectedValue(new Error('server error'));
+    renderWithClient(<UsagePage />);
+
+    expect(await screen.findByText('Contribution')).toBeInTheDocument();
+    expect(
+      await screen.findByText("Couldn't load org-wide usage"),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Loading org usage')).not.toBeInTheDocument();
+  });
 });

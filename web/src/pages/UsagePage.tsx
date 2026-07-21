@@ -143,6 +143,7 @@ export function UsagePage() {
             data={usage.data}
             isAdmin={isAdmin}
             orgIsLoading={usageOrg.isLoading}
+            orgIsError={usageOrg.isError}
             orgData={usageOrg.data}
           />
         </LayoutContent>
@@ -157,6 +158,7 @@ function UsageBody({
   data,
   isAdmin,
   orgIsLoading,
+  orgIsError,
   orgData,
 }: {
   isLoading: boolean;
@@ -164,6 +166,7 @@ function UsageBody({
   data: UsageResponse | undefined;
   isAdmin: boolean;
   orgIsLoading: boolean;
+  orgIsError: boolean;
   orgData: OrgUsageResponse | undefined;
 }) {
   if (isLoading) {
@@ -208,7 +211,11 @@ function UsageBody({
       </HStack>
 
       {isAdmin ? (
-        <OrgUsageSection isLoading={orgIsLoading} data={orgData} />
+        <OrgUsageSection
+          isLoading={orgIsLoading}
+          isError={orgIsError}
+          data={orgData}
+        />
       ) : null}
     </VStack>
   );
@@ -216,11 +223,24 @@ function UsageBody({
 
 function OrgUsageSection({
   isLoading,
+  isError,
   data,
 }: {
   isLoading: boolean;
+  isError: boolean;
   data: OrgUsageResponse | undefined;
 }) {
+  if (isError) {
+    return (
+      <Center height={120}>
+        <EmptyState
+          title="Couldn't load org-wide usage"
+          description="The API request failed. Check that the CRED server is running."
+        />
+      </Center>
+    );
+  }
+
   if (isLoading || !data) {
     return (
       <Center height={120}>
