@@ -11,9 +11,60 @@ import { ClaimsPage } from './pages/ClaimsPage';
 import { ClaimDetailPage } from './pages/ClaimDetailPage';
 import { RecallPage } from './pages/RecallPage';
 import { UsagePage } from './pages/UsagePage';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 import { Placeholder } from './pages/Placeholder';
+import { getHealth } from './api/client';
 
 const rootRoute = createRootRoute({
+  component: () => <Outlet />,
+});
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  component: LoginRoute,
+});
+
+const registerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/register',
+  component: RegisterRoute,
+});
+
+function LoginRoute() {
+  const navigate = useNavigate();
+  return (
+    <LoginPage
+      onSuccess={() => navigate({ to: '/claims' })}
+      onNavigateToRegister={() => navigate({ to: '/register' })}
+    />
+  );
+}
+
+function RegisterRoute() {
+  const navigate = useNavigate();
+  return (
+    <RegisterPage
+      onSuccess={() => navigate({ to: '/claims' })}
+      onNavigateToLogin={() => navigate({ to: '/login' })}
+    />
+  );
+}
+
+// The authenticated app: every route inside here requires a session, checked
+// once in beforeLoad rather than per-page, so an unauthenticated visitor
+// never sees a protected page flash before the redirect. A pathless route
+// (id, not path) so it adds a layout without adding a URL segment.
+const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'app',
+  beforeLoad: async () => {
+    const health = await getHealth();
+    if (!health.principal) {
+      throw redirect({ to: '/login' });
+    }
+  },
   component: () => (
     <Shell>
       <Outlet />
@@ -22,7 +73,7 @@ const rootRoute = createRootRoute({
 });
 
 const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/',
   beforeLoad: () => {
     throw redirect({ to: '/claims' });
@@ -30,13 +81,13 @@ const indexRoute = createRoute({
 });
 
 const claimsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/claims',
   component: ClaimsRoute,
 });
 
 const claimDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/claims/$id',
   component: ClaimDetailRoute,
 });
@@ -63,44 +114,48 @@ function ClaimDetailRoute() {
 }
 
 const recallRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/recall',
   component: RecallPage,
 });
 
 const usageRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/usage',
   component: UsagePage,
 });
 
 const teamRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/team',
   component: () => <Placeholder title="Team" />,
 });
 
 const projectsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/projects',
   component: () => <Placeholder title="Projects" />,
 });
 
 const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appRoute,
   path: '/settings',
   component: () => <Placeholder title="Settings" />,
 });
 
 const routeTree = rootRoute.addChildren([
-  indexRoute,
-  claimsRoute,
-  claimDetailRoute,
-  recallRoute,
-  usageRoute,
-  teamRoute,
-  projectsRoute,
-  settingsRoute,
+  loginRoute,
+  registerRoute,
+  appRoute.addChildren([
+    indexRoute,
+    claimsRoute,
+    claimDetailRoute,
+    recallRoute,
+    usageRoute,
+    teamRoute,
+    projectsRoute,
+    settingsRoute,
+  ]),
 ]);
 
 export const router = createRouter({ routeTree });

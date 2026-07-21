@@ -6,7 +6,9 @@ import {
   SideNavItem,
   SideNavSection,
 } from '@astryxdesign/core/SideNav';
+import { Button } from '@astryxdesign/core/Button';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { useLogout } from '../api';
 
 type NavPath =
   | '/claims'
@@ -43,6 +45,7 @@ const sections: { title: string; items: NavEntry[] }[] = [
 export function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const logout = useLogout();
 
   return (
     <AppShell
@@ -55,6 +58,18 @@ export function Shell({ children }: { children: ReactNode }) {
               heading="CRED"
               subheading="Console"
               headingHref="/claims"
+            />
+          }
+          footer={
+            <Button
+              label="Sign out"
+              variant="ghost"
+              isLoading={logout.isPending}
+              onClick={() => {
+                logout.mutate(undefined, {
+                  onSuccess: () => navigate({ to: '/login' }),
+                });
+              }}
             />
           }
         >

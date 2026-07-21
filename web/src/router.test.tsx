@@ -8,13 +8,25 @@ import {
 } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from './router';
-import { getClaims, getClaim } from './api/client';
-import type { ClaimList, ClaimDetail } from './api';
+import { getClaims, getClaim, getHealth } from './api/client';
+import type { ClaimList, ClaimDetail, Health } from './api';
 
 vi.mock('./api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api/client')>();
-  return { ...actual, getClaims: vi.fn(), getClaim: vi.fn() };
+  return {
+    ...actual,
+    getClaims: vi.fn(),
+    getClaim: vi.fn(),
+    getHealth: vi.fn(),
+  };
 });
+
+const AUTHENTICATED: Health = {
+  status: 'ok',
+  version: '0.1.0',
+  principal: 'local',
+  registration_open: false,
+};
 
 const CLAIMS: ClaimList = {
   claims: [
@@ -72,6 +84,7 @@ describe('claim navigation', () => {
   beforeEach(() => {
     vi.mocked(getClaims).mockResolvedValue(CLAIMS);
     vi.mocked(getClaim).mockResolvedValue(DETAIL);
+    vi.mocked(getHealth).mockResolvedValue(AUTHENTICATED);
   });
 
   it('opens a claim from the list and returns to the list from its detail', async () => {
