@@ -39,6 +39,10 @@ var ErrNotFound = fmt.Errorf("cred: not found: %w", sql.ErrNoRows)
 // printable fix.
 var ErrExtensionMissing = errors.New("cred: the pgvector extension is not installed")
 
+// ErrEmailTaken reports a registration attempt against an email that already
+// has an account.
+var ErrEmailTaken = errors.New("cred: email already registered")
+
 // Store holds a connection pool.
 type Store struct {
 	pool *pgxpool.Pool
@@ -92,6 +96,8 @@ func translate(err error) error {
 		case pgErr.Code == "42704" && strings.Contains(pgErr.Message, "vector"),
 			pgErr.Code == "42883" && strings.Contains(pgErr.Message, "halfvec"):
 			return ErrExtensionMissing
+		case pgErr.Code == "23505" && pgErr.ConstraintName == "user_credentials_email_key":
+			return ErrEmailTaken
 		}
 		// Carry the constraint name, which is the part a caller can act on,
 		// and drop the driver type.
