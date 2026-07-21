@@ -22,8 +22,13 @@ data "aws_ami" "al2023_arm64" {
   owners      = ["amazon"]
 
   filter {
+    # "al2023-ami-2*", not "al2023-ami-*": the wildcard also matched the
+    # "minimal" edition (al2023-ami-minimal-...), which strips out the
+    # pre-installed SSM agent — instances built from it never register with
+    # Session Manager, discovered when a real instance sat at PingStatus
+    # "None" indefinitely despite correct networking and IAM.
     name   = "name"
-    values = ["al2023-ami-*-arm64"]
+    values = ["al2023-ami-2*-arm64"]
   }
 
   filter {
