@@ -38,26 +38,37 @@ diff rather than a score.
 
 ## Status
 
-**First implementation slice, read-only.** Discovery is complete and documented,
-including the evidence that contradicts parts of the original thesis.
+**Read path plus the automatic write path.** Discovery is complete and
+documented, including the evidence that contradicts parts of the original
+thesis.
 
-This build seeds claims from a repository's own documentation, indexes them, and
-serves them back through one MCP tool and a CLI. There is **no write path**: no
-`remember`, no `revise`, no `confirm`, and no curation worker. That is
-deliberate — see [D-016](docs/research/decision-log.md) — and
-[what is not built](#what-is-not-built-yet) lists everything that follows.
+This build seeds claims from a repository's own documentation, retrieves them
+through MCP and a CLI, and now **contributes** them too. Contribution follows
+[D-017](docs/research/decision-log.md): automatic **nomination**, not automatic
+storage. A model proposes candidate claims into a constrained schema;
+deterministic code decides what is written. Extraction runs **off the turn** on
+a River worker, so an agent is never blocked waiting for it. Every write is
+visible (`cred log`) and reversible (`cred forget`).
 
-The read path requires **no API key, no provider choice, and no vector-store
-decision**. Embeddings run in-process in pure Go with `CGO_ENABLED=0`.
+Two things are still deliberately absent — `revise`, `confirm`, and the
+LLM-driven contradiction reconciler — plus everything under
+[what is not built](#what-is-not-built-yet).
+
+The **read path and explicit `remember` require no API key, no provider choice,
+and no vector-store decision** — embeddings run in-process in pure Go with
+`CGO_ENABLED=0`. Only the automatic-nomination worker (`cred curate`) calls a
+model, and only it needs a key.
 
 ## Quick start
 
 ```sh
 docker compose up -d db     # PostgreSQL 17 + pgvector, on 127.0.0.1:5433
 go build -o cred .
-./cred migrate              # apply the schema
+./cred migrate              # apply the schema and the River queue tables
 ./cred seed .               # index this repository's own documentation
 ./cred recall "how is access control evaluated"
+./cred remember "we fused the two retrieval arms with RRF at k=60"  # no key
+./cred log                  # see what has been written
 ```
 
 `./cred doctor` checks every part of the installation and names the fix for
@@ -74,23 +85,36 @@ it.
 claude mcp add cred -- /absolute/path/to/cred serve
 ```
 
-One tool, `recall`, read-only. Its output is fenced as data with an explicit
-warning, never interpolated into a prompt — ingested content is untrusted (L8).
+Two tools: `recall` (read-only) and `remember` (explicit contribution by
+attestation). Recall output is fenced as data with an explicit warning, never
+interpolated into a prompt — ingested content is untrusted (L8). `remember`
+stores the statement the agent asserts, attributed to the calling principal;
+the write is confirmed in-band and is reversible with `cred forget`.
+
+For the **automatic** path — extracting claims from the work as it happens — see
+[contributing knowledge](#contributing-knowledge-the-write-path) below. It is a
+hook plus a background worker, not part of `serve`.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `cred migrate` | Apply database migrations. Reports a partial application honestly |
+| `cred migrate` | Apply database migrations (CRED schema + River tables). Reports a partial application honestly |
 | `cred seed <path>` | Index `AGENTS.md`, `CLAUDE.md`, `README.md`, `.cursorrules`, `.windsurfrules` and `docs/**/*.md`. Idempotent |
 | `cred recall <query>` | Retrieve claims, showing what each retrieval arm contributed |
-| `cred serve` | Run the MCP server over stdio |
+| `cred remember <text>` | Contribute a claim by attestation. Deterministic, no API key |
+| `cred capture` | Enqueue captured material for automatic extraction. The hook entry point; returns immediately |
+| `cred curate` | Run the background worker: nominate off the turn (needs a key), then deduplicate |
+| `cred log` | Show recent writes — live, superseded, or forgotten (D-016) |
+| `cred forget <id>` | Reverse a write by expiring its claim (D-016) |
+| `cred serve` | Run the MCP server over stdio (`recall` + `remember`) |
 | `cred doctor` | Check the installation; every failure names its fix |
 
 `cred recall` prints the score decomposition on purpose. The most reliable
 failure mode across every surveyed memory system is silent write acceptance
 followed by empty reads — thousands of documents visible in a UI and zero
-results from search, with no way to tell why. This is that missing instrument.
+results from search, with no way to tell why. `cred log` is the same instrument
+for the write side: every automatic write is inspectable, never silent.
 
 ## Configuration
 
@@ -104,6 +128,15 @@ Every variable has a working default, so the commands above need no `.env`.
 | `CRED_PRINCIPAL` | `local` | Identity recall is evaluated against |
 | `CRED_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `CRED_LOG_FORMAT` | `text` | `text` or `json` |
+| `CRED_AUTO_CAPTURE` | `true` | Automatic nomination on `capture`; opt out with `false` |
+| `CRED_LLM_API_KEY` | — | Model key for `cred curate` (falls back to `ANTHROPIC_API_KEY`) |
+| `CRED_LLM_MODEL` | `claude-opus-4-8` | Model id the nominator uses |
+
+There is deliberately no `.env` file and no `.env.example`. Every variable has a
+working default, the binary loads no dotenv file, and a `.env.example` you must
+copy first is a step — and steps cost users (PRD acceptance criterion 11). Set
+`CRED_LLM_API_KEY` (or `ANTHROPIC_API_KEY`) in your environment only when you run
+the automatic-nomination worker; nothing else needs configuring.
 
 ## Architecture, and the laws it encodes
 
@@ -114,13 +147,15 @@ comment is a law that will be broken by someone in a hurry.
 ```
 main.go                    thin: signals, calls internal/cli
 internal/
-  cli/                     migrate, seed, recall, serve, doctor
+  cli/                     migrate, seed, recall, remember, capture, curate, log, forget, serve, doctor
   config/                  CRED_* resolution
   claim/                   Claim, Evidence, Principal, ACL, Interval
   temporal/                bi-temporal algebra. PURE
   acl/                     ACL intersection algebra. PURE
   recall/                  retrieval orchestration, RRF fusion
   seed/                    documentation chunking and ingestion
+  nominate/                the LLM boundary: Nominator + fake + Anthropic adapter
+  curate/                  the write executor and the River workers
   store/
     migrations/            *.sql, embedded via embed.FS
     pg/                    the ONLY package importing pgx
@@ -148,6 +183,76 @@ CRED itself: grep the engine for the principal type, and if it only appears in a
 client package, the retreat has already happened. This slice ships one
 principal, and `principals`, `claim_acl` and `evidence_acl` are real tables from
 the first commit.
+
+**The model nominates, code decides — structurally (L2).** `internal/nominate`
+emits candidate claims and holds no store: `depguard` forbids it from importing
+`internal/store`, so an extractor with a database handle does not compile. The
+deterministic write executor lives on the other side of that boundary, in
+`internal/curate`. Evidence is materialised from the trusted source, never from
+the model's output — a candidate whose quote is not a verbatim span of the
+source is dropped, not stored (L1). Automatic does not mean unvalidated: every
+model response is validated locally and gated on `stop_reason != "max_tokens"`,
+because constrained decoding makes a truncated response a valid JSON prefix that
+parses cleanly and is silently wrong.
+
+## Contributing knowledge (the write path)
+
+There are two ways knowledge is written, and they differ in what they cost.
+
+**Explicit — `remember`, by attestation.** `cred remember "..."` and the MCP
+`remember` tool store the statement a person asserts. Human attestation is
+evidence (L1), so the assertion is its own evidence and the principal is the
+attester. This calls no model, needs no API key, and returns the claim id
+immediately.
+
+**Automatic — nomination, off the turn.** Matching the shipped Mem0 pattern
+(D-017), an agent hook captures material and enqueues a job; a background worker
+extracts candidate claims from it and code decides what to store. It defaults to
+on and requires a model key, but it never blocks the agent's turn — the trigger
+returns as soon as the job is durably enqueued.
+
+```
+hook → cred capture → [River queue] → cred curate → nominate → validate → write → dedup
+        (returns now)                  (worker, off the turn, needs a key)
+```
+
+A documented hook example for Claude Code — capture Bash results and the session
+summary, exactly Mem0's trigger points, defaulting to on with a `CRED_AUTO_*`
+opt-out:
+
+```jsonc
+// .claude/settings.json — CRED automatic capture (opt out with CRED_AUTO_CAPTURE=false)
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        // The tool result on stdin is enqueued and control returns at once;
+        // extraction happens later in `cred curate`, off the turn.
+        "command": "jq -r '.tool_response.stdout // empty' | cred capture --repo \"$CLAUDE_PROJECT_DIR\" --trigger tool_result"
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "jq -r '.transcript_path' | xargs tail -c 8000 | cred capture --repo \"$CLAUDE_PROJECT_DIR\" --trigger session_end"
+      }]
+    }]
+  }
+}
+```
+
+Then run the worker alongside the server:
+
+```sh
+export CRED_LLM_API_KEY=sk-...       # or ANTHROPIC_API_KEY
+cred curate                          # drains the queue; nominate off the turn, then dedup
+```
+
+This is a documented example, not a shipped harness: the trigger model and the
+`CRED_AUTO_*` opt-out are the parts CRED provides; wiring them into a specific
+agent is one settings file.
 
 ## Verified results
 
@@ -249,9 +354,14 @@ reporting on first ingest. Neither is built yet.
 ## Testing
 
 ```sh
-go test ./...                      # unit and conformance; no database
-go test -tags=integration ./...    # adds seed-and-recall against Postgres
+go test ./...                      # unit and conformance; no database, no API key
+go test -tags=integration ./...    # adds seed, recall, and the write path against Postgres
 ```
+
+The write-path integration tests run the real River queue and worker against a
+real Postgres, but drive it with the **fake nominator** — so they need no API
+key even though the production write path does. That is the property the whole
+`nominate`/`curate` split is arranged to preserve.
 
 Integration tests skip when Postgres is unreachable. In CI, `CRED_REQUIRE_DB=1`
 turns that skip into a failure, and the suite fails if zero integration tests
@@ -265,14 +375,18 @@ either ever needs a database, the boundary has already been violated.
 
 Named explicitly rather than left silent.
 
-- **The entire write path.** No `remember`, `revise`, or `confirm`, and no
-  curation worker (dedupe, reconcile, expire, prune, rescore). Scoped out by
-  D-016; this slice is read-only end to end.
+- **`revise` and `confirm`.** Two of the four MCP tools are still absent. `recall`
+  and `remember` ship; supersession-in-place and in-task affirmation do not.
+- **The LLM-driven contradiction reconciler.** The curation worker deduplicates
+  (exact-hash, D-010) and supersedes duplicates through the bi-temporal
+  machinery, but it does not yet nominate *contradictions* for the reconciler to
+  expire. That step needs the same LLM boundary the extractor uses and is the
+  next piece of curation. Expire, prune, and rescore are also not built.
 - **Semantic anchoring (L3).** Evidence carries a file path, a line range, and a
   content hash — tier 4 of the fingerprint ladder only. There is no tree-sitter
   symbol path and no normalized AST-node hash, so a pure-formatting commit
   currently *would* expire claims. That is the acceptance criterion the ladder
-  exists to meet, and it needs the write path to be meaningful.
+  exists to meet.
 - **MaxSim second-stage ranking (D-010).** Retrieval is dense + lexical fused by
   RRF, with no reranking of any kind. MaxSim costs 242x storage per document and
   its storage strategy is an open design question, not a settled one.
@@ -285,7 +399,14 @@ Named explicitly rather than left silent.
 - **OpenTelemetry.** `internal/obs` holds the attribute constants and the `slog`
   setup. No spans are emitted and no exporter is wired.
 - **Usage limits.** Contribution quota, cost attribution, recall budget per
-  principal, and scope growth bounds all need a write path.
+  principal, and scope growth bounds. The write path exists now, so these are
+  the next security control to add: shared memory with unbounded per-principal
+  write access is a poisoning vector. The `nominate` boundary already exposes a
+  `UsageSink` hook for the cost ledger; nothing is wired to it yet.
+- **A durable cost ceiling.** `internal/nominate` records token usage per call
+  through `UsageSink`, but there is no ledger and no hard USD ceiling enforced at
+  job dispatch. Until there is, `cred curate` will call the model as often as the
+  queue asks it to.
 - **`squawk` migration linting, `govulncheck`, release automation, and the
   published container image.** CI runs lint, the two-assertion CGO guard, unit,
   integration, and race.
@@ -303,6 +424,22 @@ Named explicitly rather than left silent.
 - **`pgvector-go` is not used.** The only thing needed was one text encoding for
   `halfvec`, which is thirty lines. Preferring thirty lines over a module is the
   standing rule.
+- **The Anthropic adapter is hand-rolled, not the official SDK.** `internal/
+  nominate` talks to the Messages API over `net/http` with `encoding/json` — zero
+  new dependencies. The surface CRED needs is one POST with a JSON-schema output
+  format and a `stop_reason` back; the worker-ops spike also warns the Stainless
+  SDKs ship breaking changes in *minor* releases weekly, a standing tax not worth
+  taking for this little API. A second provider would be a second `Model`, not a
+  framework.
+- **A pre-existing seed bug was fixed while adding supersession.** The
+  read-only slice's `seed` path inserted a changed chunk's new evidence *before*
+  superseding the old one, in two separate transactions — which violates the
+  `evidence_live_chunk` unique index (two live rows for one repo/path/ordinal).
+  It was reproduced failing at the previous commit on a clean database. The fix
+  is `pg.ReplaceSeed`: supersede-then-insert in one transaction, so the new live
+  row is unique and a crash leaves neither a duplicate nor a gap. Write-path
+  evidence carries a NULL `chunk_ordinal` and is exempt from that index entirely,
+  since many claims may point at spans of the same file.
 
 ## Dependencies
 
@@ -314,8 +451,11 @@ Named explicitly rather than left silent.
 | `github.com/gomlx/onnx-gomlx`, `github.com/gomlx/gomlx` | Accepted set. The pure-Go embedding stack |
 | `github.com/stretchr/testify` | Accepted set, `require` only, enforced by `testifylint` |
 | `golang.org/x/text` | **Outside the accepted set.** NFD normalization for the tokenizer's accent stripping, which the standard library does not provide. It is the tokenizer's sole dependency in the spike as well |
+| `github.com/riverqueue/river` | Accepted set (D-013). Postgres-backed job queue for the write path — extraction runs off the turn on a River worker (D-017). Taken for correct leader handover on long-running jobs, transactional enqueue, and first-class OTel middleware, not for throughput |
 
-River is not yet a dependency: there is no worker to schedule.
+The LLM client is **not** a dependency: the Anthropic adapter is hand-rolled over
+`net/http` (see the deviations above). Reads and explicit `remember` add no
+dependency at all.
 
 ## Documentation
 

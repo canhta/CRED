@@ -19,5 +19,5 @@ func main() {
 		os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	os.Exit(cli.Run(ctx, os.Args, os.Stdout, os.Stderr))
+	os.Exit(cli.Run(ctx, os.Args, os.Stdin, os.Stdout, os.Stderr))
 }

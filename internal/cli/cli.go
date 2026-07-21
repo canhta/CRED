@@ -30,10 +30,15 @@ Usage:
   cred <command> [flags]
 
 Commands:
-  migrate            Apply database migrations
+  migrate            Apply database migrations (CRED schema + River tables)
   seed <path>        Seed claims from a repository's documentation
   recall <query>     Retrieve claims, showing why each one ranked
-  serve              Run the MCP server over stdio
+  remember <text>    Contribute a claim by attestation (no API key needed)
+  capture            Enqueue material for automatic extraction (hook entry point)
+  curate             Run the background worker: nominate off the turn, dedup
+  log                Show recent writes (visible, per D-016)
+  forget <id>        Reverse a write by expiring its claim (per D-016)
+  serve              Run the MCP server over stdio (recall + remember)
   doctor             Check the installation and name the fix for anything broken
 
 Environment:
@@ -43,12 +48,17 @@ Environment:
   CRED_PRINCIPAL               Identity recall is evaluated against
   CRED_LOG_LEVEL               debug, info, warn, error
   CRED_LOG_FORMAT              text or json
+  CRED_AUTO_CAPTURE            Automatic nomination on capture (default true)
+  CRED_LLM_API_KEY             Model key for the curate worker (or ANTHROPIC_API_KEY)
+  CRED_LLM_MODEL               Model id for nomination (default claude-opus-4-8)
 
-This build is read-only. There is no write path and no remember tool.
+Reads and explicit remember need no API key. Only curate — the automatic
+nomination worker — does. Every write is visible (cred log) and reversible
+(cred forget).
 `
 
 // Run dispatches a subcommand and returns a process exit code.
-func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
 		fmt.Fprint(stderr, usage)
 		return 2
@@ -66,7 +76,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	log := obs.NewLogger(stderr, cfg.LogLevel, cfg.LogFormat)
 
 	cmd, rest := args[1], args[2:]
-	err = dispatch(ctx, cmd, rest, cfg, log, stdout, stderr)
+	err = dispatch(ctx, cmd, rest, cfg, log, stdin, stdout, stderr)
 
 	switch {
 	case err == nil:
@@ -88,7 +98,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func dispatch(ctx context.Context, cmd string, args []string, cfg config.Config,
-	log *slog.Logger, stdout, stderr io.Writer,
+	log *slog.Logger, stdin io.Reader, stdout, stderr io.Writer,
 ) error {
 	switch cmd {
 	case "migrate":
@@ -97,6 +107,16 @@ func dispatch(ctx context.Context, cmd string, args []string, cfg config.Config,
 		return runSeed(ctx, args, cfg, log, stdout)
 	case "recall":
 		return runRecall(ctx, args, cfg, stdout)
+	case "remember":
+		return runRemember(ctx, args, cfg, log, stdout)
+	case "capture":
+		return runCapture(ctx, args, cfg, stdin, stdout)
+	case "curate":
+		return runCurate(ctx, args, cfg, log, stderr)
+	case "log":
+		return runLog(ctx, args, cfg, stdout)
+	case "forget":
+		return runForget(ctx, args, cfg, stdout)
 	case "serve":
 		return runServe(ctx, args, cfg, log, stderr)
 	case "doctor":

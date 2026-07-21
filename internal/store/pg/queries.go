@@ -38,7 +38,10 @@ func (s *Store) LiveChunks(ctx context.Context, repo string) (map[string]LiveChu
 		  JOIN claims c ON c.id = ce.claim_id
 		 WHERE e.source_repo = $1
 		   AND e.superseded_at IS NULL
-		   AND c.superseded_at IS NULL`, repo)
+		   AND c.superseded_at IS NULL
+		   -- Seeded chunks only. Write-path evidence carries a NULL ordinal and is
+		   -- not a re-seedable chunk, so it never participates in seed idempotency.
+		   AND e.chunk_ordinal IS NOT NULL`, repo)
 	if err != nil {
 		return nil, translate(err)
 	}
@@ -76,7 +79,7 @@ type SeedRecord struct {
 	Principals []claim.PrincipalID
 }
 
-// InsertSeed writes one chunk in a single transaction: evidence, claim, the
+// InsertSeed writes one new chunk in a single transaction: evidence, claim, the
 // L1 link, both ACLs, and the embedding.
 //
 // One transaction because a claim that commits without its evidence is an
@@ -89,12 +92,66 @@ func (s *Store) InsertSeed(ctx context.Context, modelID int, r SeedRecord) (clai
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	sum, err := hex.DecodeString(r.Evidence.ContentSHA256)
+	claimID, _, err = s.insertSeedTx(ctx, tx, modelID, r)
 	if err != nil {
-		return "", fmt.Errorf("decode content hash: %w", err)
+		return "", err
+	}
+	return claimID, translate(tx.Commit(ctx))
+}
+
+// ReplaceSeed supersedes an existing chunk and writes its successor in one
+// transaction, closing the old evidence and claim and linking the claim to the
+// new one.
+//
+// The order inside the transaction is load-bearing. The old evidence is closed
+// *first*, which removes it from the evidence_live_chunk partial unique index
+// (that index constrains only live, non-NULL-ordinal rows); only then can the
+// new chunk — same (repo, path, ordinal) — be inserted without colliding.
+// Insert-first is impossible against that index, which is why this is one atomic
+// step rather than an insert followed by a separate supersede. Atomicity also
+// means a crash leaves neither a duplicate nor a gap: the whole replacement
+// either happens or does not.
+func (s *Store) ReplaceSeed(ctx context.Context, modelID int, old LiveChunk, r SeedRecord, now time.Time) (claimID string, err error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", translate(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Close the old evidence before inserting the new chunk, so the new live row
+	// is unique on (repo, path, ordinal).
+	if _, err = tx.Exec(ctx, `
+		UPDATE evidence SET superseded_at = $2, valid_until = $2
+		 WHERE id = $1 AND superseded_at IS NULL`, old.EvidenceID, now); err != nil {
+		return "", translate(err)
 	}
 
-	var evidenceID string
+	claimID, _, err = s.insertSeedTx(ctx, tx, modelID, r)
+	if err != nil {
+		return "", err
+	}
+
+	// Close the old claim and point it at its successor. Nothing is deleted;
+	// things expire, and the old row survives to record what the project used to
+	// say.
+	if _, err = tx.Exec(ctx, `
+		UPDATE claims SET superseded_at = $2, valid_until = $2, superseded_by = $3
+		 WHERE id = $1 AND superseded_at IS NULL`,
+		old.ClaimID, now, claimID); err != nil {
+		return "", translate(err)
+	}
+
+	return claimID, translate(tx.Commit(ctx))
+}
+
+// insertSeedTx writes one chunk's rows inside an existing transaction. It is the
+// shared body of InsertSeed and ReplaceSeed.
+func (s *Store) insertSeedTx(ctx context.Context, tx pgx.Tx, modelID int, r SeedRecord) (claimID, evidenceID string, err error) {
+	sum, err := hex.DecodeString(r.Evidence.ContentSHA256)
+	if err != nil {
+		return "", "", fmt.Errorf("decode content hash: %w", err)
+	}
+
 	err = tx.QueryRow(ctx, `
 		INSERT INTO evidence (source_kind, source_repo, source_path, chunk_ordinal,
 		                      line_start, line_end, extracted_text, content_sha256,
@@ -106,7 +163,7 @@ func (s *Store) InsertSeed(ctx context.Context, modelID int, r SeedRecord) (clai
 		r.Evidence.Recorded.From,
 	).Scan(&evidenceID)
 	if err != nil {
-		return "", translate(err)
+		return "", "", translate(err)
 	}
 
 	err = tx.QueryRow(ctx, `
@@ -121,25 +178,25 @@ func (s *Store) InsertSeed(ctx context.Context, modelID int, r SeedRecord) (clai
 		r.Claim.SourceRepo, r.Claim.ExtractedByModel,
 	).Scan(&claimID)
 	if err != nil {
-		return "", translate(err)
+		return "", "", translate(err)
 	}
 
 	if _, err = tx.Exec(ctx,
 		`INSERT INTO claim_evidence (claim_id, evidence_id) VALUES ($1,$2)`,
 		claimID, evidenceID); err != nil {
-		return "", translate(err)
+		return "", "", translate(err)
 	}
 
 	for _, p := range r.Principals {
 		if _, err = tx.Exec(ctx,
 			`INSERT INTO claim_acl (claim_id, principal_id) VALUES ($1,$2)`,
 			claimID, string(p)); err != nil {
-			return "", translate(err)
+			return "", "", translate(err)
 		}
 		if _, err = tx.Exec(ctx,
 			`INSERT INTO evidence_acl (evidence_id, principal_id) VALUES ($1,$2)`,
 			evidenceID, string(p)); err != nil {
-			return "", translate(err)
+			return "", "", translate(err)
 		}
 	}
 
@@ -147,37 +204,10 @@ func (s *Store) InsertSeed(ctx context.Context, modelID int, r SeedRecord) (clai
 		INSERT INTO claim_embeddings (embedding_model_id, claim_id, embedding)
 		VALUES ($1, $2, $3::halfvec)`,
 		modelID, claimID, encodeHalfvec(r.Embedding)); err != nil {
-		return "", translate(err)
+		return "", "", translate(err)
 	}
 
-	return claimID, translate(tx.Commit(ctx))
-}
-
-// SupersedeChunk closes a chunk's evidence and claim in transaction time at
-// now, and links the claim to its successor.
-//
-// Nothing is deleted; things expire. The successor is written first so that a
-// crash between the two leaves a duplicate rather than a gap — a gap is a
-// query that silently returns nothing.
-func (s *Store) SupersedeChunk(ctx context.Context, old LiveChunk, successorClaimID string, now time.Time) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return translate(err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx, `
-		UPDATE evidence SET superseded_at = $2, valid_until = $2
-		 WHERE id = $1 AND superseded_at IS NULL`, old.EvidenceID, now); err != nil {
-		return translate(err)
-	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE claims SET superseded_at = $2, valid_until = $2, superseded_by = $3
-		 WHERE id = $1 AND superseded_at IS NULL`,
-		old.ClaimID, now, successorClaimID); err != nil {
-		return translate(err)
-	}
-	return translate(tx.Commit(ctx))
+	return claimID, evidenceID, nil
 }
 
 // DenseSearch returns the nearest live claims by inner-product distance.

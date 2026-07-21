@@ -1258,3 +1258,74 @@ D-009's never-automatic rule is withdrawn. When writes arrive, the shipped
 precedent is automatic contribution at agent-lifecycle trigger points,
 defaulting to on. The constraint that survives is that writes must be
 **visible and reversible**, not that they must be manual.
+
+---
+
+## D-017 — Automatic write at agent-lifecycle triggers, nomination not storage
+
+- **Date:** 2026-07-21
+- **Status:** Decided
+- **Completes:** D-009 (whose never-automatic half was already withdrawn by D-016)
+- **Evidence:** [how-they-operate.md](evidence/how-they-operate.md)
+
+### Decision
+
+CRED writes automatically, at agent-lifecycle trigger points, defaulting to on
+— the shipped Mem0 pattern. What is automatic is **nomination**, not storage.
+
+### The mechanics, matched to the shipped precedent
+
+Mem0's plugin writes at three points, all on by default, gated only by
+opt-outs (`how-they-operate.md`): every 3rd user prompt, every Bash result,
+and session `Stop`. One `add` is synchronous — 1 LLM call, 2 embedding calls,
+~4 DB round trips, returning only after completion.
+
+CRED matches the trigger model and the on-by-default posture. It does **not**
+match "store whatever the model returns," because L2 forbids it.
+
+### Where this differs from Mem0, and why it must
+
+- **L2 — the model nominates, code decides.** The extractor emits candidate
+  claims into a constrained schema and holds no authority to write, supersede,
+  or expire. Automatic does not mean unvalidated: every response is validated
+  locally and gated on `finish_reason != "length"`, because no provider
+  validates structured output server-side.
+- **L1 — no claim without evidence.** An automatic extraction that cannot point
+  to the span that produced it is dropped, not stored. This is stricter than
+  Mem0, whose extractions are free-floating memories.
+- **D-016 — visible and reversible.** Every automatic write is inspectable
+  (`cred log`) and reversible (`cred forget <id>`). The surviving constraint
+  from D-009 is not that writes are manual; it is that they are never silent
+  and never permanent-by-default.
+- **L4 — confirmation inside the task, never a queue.** Automatic writes do not
+  create an approval backlog. Reversal happens at the moment a person notices a
+  wrong claim in a recall result, not in a review session.
+
+### The latency constraint this inherits
+
+The read path is 147.7 ms (D-016), inside Mem0's 150–200 ms comfort band. The
+write path adds an LLM call and must not block the agent's turn on it. Mem0's
+`add` is synchronous and its `UserPromptSubmit` hook has an 8 s budget;
+CRED's extraction runs **off the turn** — the trigger enqueues, a River worker
+extracts and writes, and the agent is never blocked waiting for nomination.
+
+This is the first use of River (D-013 accepted it; nothing scheduled work until
+now) and the first crossing of the LLM boundary (`internal/nominate`).
+
+### What this rules out
+
+- Storing model output without local validation (L2).
+- Writing a claim whose evidence pointer is absent or unresolvable (L1).
+- Blocking the agent's turn on extraction latency.
+- Silent or irreversible writes (D-016).
+- An approval queue of any kind (L4).
+
+### What this forces
+
+- `internal/nominate` — the LLM boundary, with a fake for tests, per the layout.
+- A curation worker (dedup and supersession) on River, because automatic
+  writes at every third turn will produce duplicates and contradictions by
+  construction. Exact-hash dedup at v1 (D-010's neighbour decision in the
+  tech-decisions spike), fuzzy deferred.
+- `cred log` and `cred forget` — visibility and reversal are now product
+  surface, not a future nicety.

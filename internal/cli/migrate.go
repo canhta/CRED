@@ -30,10 +30,18 @@ func runMigrate(ctx context.Context, args []string, cfg config.Config, out io.Wr
 		return fmt.Errorf("migrate: %w", err)
 	}
 
+	// River owns and versions its own tables, so its migrator runs alongside
+	// goose. Idempotent: a no-op once the tables exist. The write path needs
+	// these; the read path does not, but running them here keeps a single
+	// `cred migrate` sufficient for both.
+	if err := st.MigrateRiver(ctx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
 	if res.FromVersion == res.ToVersion {
-		fmt.Fprintf(out, "migrate    already at version %d, nothing to apply\n", res.ToVersion)
+		fmt.Fprintf(out, "migrate    already at version %d, river tables ensured\n", res.ToVersion)
 		return nil
 	}
-	fmt.Fprintf(out, "migrate    version %d -> %d\n", res.FromVersion, res.ToVersion)
+	fmt.Fprintf(out, "migrate    version %d -> %d, river tables ensured\n", res.FromVersion, res.ToVersion)
 	return nil
 }

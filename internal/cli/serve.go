@@ -46,11 +46,15 @@ func runServe(ctx context.Context, args []string, cfg config.Config,
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stderr, "cred %s  mcp stdio  1 tool (recall, read-only)  %d claims, %d evidence\n",
+	fmt.Fprintf(stderr, "cred %s  mcp stdio  2 tools (recall, remember)  %d claims, %d evidence\n",
 		mcpsrv.Version, claims, evidence)
 
 	svc := recall.New(st, emb, count)
-	srv := mcpsrv.New(svc, claim.PrincipalID(cfg.Principal), log)
+	// The remember tool is deterministic attestation — no key required, so it is
+	// always registered. Automatic nomination is a separate process (`cred
+	// curate`) driven by a hook, not by this server.
+	exec := newExecutor(st, emb, log)
+	srv := mcpsrv.New(svc, exec, claim.PrincipalID(cfg.Principal), log)
 
 	// ctx is cancelled by the signal handler in main. Run returns when the
 	// client disconnects or the context is done; the deferred Close calls

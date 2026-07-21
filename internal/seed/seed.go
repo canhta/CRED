@@ -16,7 +16,7 @@ type Store interface {
 	PresentModel(ctx context.Context) (id int, name string, dims int, err error)
 	LiveChunks(ctx context.Context, repo string) (map[string]pg.LiveChunk, error)
 	InsertSeed(ctx context.Context, modelID int, r pg.SeedRecord) (string, error)
-	SupersedeChunk(ctx context.Context, old pg.LiveChunk, successorClaimID string, now time.Time) error
+	ReplaceSeed(ctx context.Context, modelID int, old pg.LiveChunk, r pg.SeedRecord, now time.Time) (string, error)
 }
 
 // Embedder is the ingest side of internal/embed.
@@ -113,7 +113,7 @@ func (s *Seeder) Run(ctx context.Context, root string, principals []claim.Princi
 			key := pg.ChunkKey(c.Path, c.Ordinal)
 			old, existed := live[key]
 
-			claimID, err := s.store.InsertSeed(ctx, modelID, pg.SeedRecord{
+			rec := pg.SeedRecord{
 				Ordinal:    c.Ordinal,
 				Principals: principals,
 				Evidence: claim.Evidence{
@@ -144,16 +144,24 @@ func (s *Seeder) Run(ctx context.Context, root string, principals []claim.Princi
 					ExtractedByModel: "", // deterministic extraction; no model
 				},
 				Embedding: vecs[i],
-			})
-			if err != nil {
-				return err
 			}
 
+			// A changed chunk is superseded and replaced in one transaction, so
+			// the new live row never collides with the old one on the
+			// one-live-chunk-per-(repo,path,ordinal) index, and a crash leaves
+			// neither a duplicate nor a gap. A new chunk is a plain insert.
+			var claimID string
 			if existed {
-				if err := s.store.SupersedeChunk(ctx, old, claimID, now); err != nil {
-					return fmt.Errorf("supersede %s: %w", key, err)
+				claimID, err = s.store.ReplaceSeed(ctx, modelID, old, rec, now)
+				if err != nil {
+					return fmt.Errorf("replace %s: %w", key, err)
 				}
 				rep.Superseded++
+			} else {
+				claimID, err = s.store.InsertSeed(ctx, modelID, rec)
+				if err != nil {
+					return err
+				}
 			}
 			rep.Inserted++
 

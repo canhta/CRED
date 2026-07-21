@@ -97,6 +97,22 @@ linters:
           deny:
             - pkg: "github.com/jackc/pgx"
               desc: "Only internal/store/pg may import the database driver."
+        extractor-cannot-write:
+          # L2, structural. The extractor nominates; it holds no authority to
+          # write, supersede, or expire. Forbidding the store import makes an
+          # extractor with a database handle a build failure rather than a code
+          # review note. internal/curate is where the write executor lives, on
+          # the other side of this boundary, and it may import the store freely.
+          list-mode: lax
+          files:
+            - "**/internal/nominate/**"
+          deny:
+            - pkg: "github.com/canhta/cred/internal/store"
+              desc: >-
+                L2: the model nominates, code decides. internal/nominate emits
+                candidates and must not reach the store — the write executor in
+                internal/curate is the only thing that turns a candidate into a
+                row.
 
   exclusions:
     presets:
