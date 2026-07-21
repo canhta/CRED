@@ -11,3 +11,7 @@ output "ec2_instance_id" {
 output "elastic_ip" {
   value = aws_eip.cred.public_ip
 }
+
+output "gha_deploy_role_arn" {
+  value = aws_iam_role.gha_deploy.arn
+}
