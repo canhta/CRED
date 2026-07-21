@@ -9,6 +9,7 @@ import (
 
 	"github.com/canhta/cred/internal/config"
 	"github.com/canhta/cred/internal/curate"
+	"github.com/canhta/cred/internal/nominate"
 )
 
 // runCurate runs the background worker: it drains nomination jobs (crossing the
@@ -82,7 +83,10 @@ func runCurate(ctx context.Context, args []string, cfg config.Config, log *slog.
 
 func modelLabel(cfg config.Config) string {
 	if cfg.LLMModel != "" {
+		if cfg.LLMBaseURL != "" {
+			return cfg.LLMModel + " @ " + cfg.LLMBaseURL
+		}
 		return cfg.LLMModel
 	}
-	return "claude-opus-4-8 (default)"
+	return nominate.DefaultModel + " (default)"
 }

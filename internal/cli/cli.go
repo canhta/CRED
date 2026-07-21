@@ -51,8 +51,9 @@ Environment:
   CRED_LOG_LEVEL               debug, info, warn, error
   CRED_LOG_FORMAT              text or json
   CRED_AUTO_CAPTURE            Automatic nomination on capture (default true)
-  CRED_LLM_API_KEY             Model key for the curate worker (or ANTHROPIC_API_KEY)
-  CRED_LLM_MODEL               Model id for nomination (default claude-opus-4-8)
+  CRED_LLM_API_KEY             Model key for the curate worker
+  CRED_LLM_MODEL               Model id for nomination (Anthropic default; required otherwise)
+  CRED_LLM_BASE_URL            OpenAI-compatible endpoint: OpenAI, DeepSeek, self-hosted
   CRED_CONTRIBUTION_QUOTA      Accepted claims per principal per window (default 120)
   CRED_COST_MAX_CALLS          Inference calls per principal per window (default 500)
   CRED_COST_MAX_TOKENS         Input tokens per principal per window (default 2000000)

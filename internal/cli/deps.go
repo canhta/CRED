@@ -58,11 +58,22 @@ func newExecutor(st *pg.Store, emb *embed.BGE, log *slog.Logger) *curate.Executo
 // principal and scope that occasioned it (PRD 8). That is the "cost attribution
 // at the nominate boundary" the cost ceiling later reads.
 func newNominator(cfg config.Config, st *pg.Store, log *slog.Logger) (nominate.Nominator, error) {
-	model, err := nominate.NewAnthropicModel(cfg.LLMAPIKey, nominate.WithModel(cfg.LLMModel))
+	// The base URL picks the dialect. Empty is Anthropic (Claude); any value is
+	// OpenAI-compatible, which covers OpenAI, DeepSeek, and self-hosted servers.
+	// The two adapters together are the whole provider surface — a new provider
+	// that speaks one of these two dialects needs no code.
+	var model nominate.Model
+	var err error
+	if cfg.LLMBaseURL == "" {
+		model, err = nominate.NewAnthropicModel(cfg.LLMAPIKey, nominate.WithModel(cfg.LLMModel))
+	} else {
+		model, err = nominate.NewOpenAICompatModel(cfg.LLMAPIKey, cfg.LLMBaseURL, cfg.LLMModel)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w\n\n  The automatic write path calls a model. Set CRED_LLM_API_KEY\n"+
-			"  (or ANTHROPIC_API_KEY), or run the worker with CRED_AUTO_CAPTURE=false\n"+
-			"  and use `cred remember` for explicit, key-free contribution", err)
+			"  (and CRED_LLM_BASE_URL + CRED_LLM_MODEL for OpenAI/DeepSeek/self-hosted),\n"+
+			"  or run the worker with CRED_AUTO_CAPTURE=false and use `cred remember`\n"+
+			"  for explicit, key-free contribution", err)
 	}
 	return nominate.NewExtractor(model, curate.NewUsageRecorder(st, log), log), nil
 }

@@ -12,3 +12,9 @@ v0/corpus/_raw/
 v0/index/
 v0/__pycache__/
 **/__pycache__/
+
+# Local secrets — API keys for live testing. NEVER committed.
+.env
+.env.*
+!.env.example
+.secrets/

@@ -176,10 +176,17 @@ copying thirty lines over adding a module for them.
 **Write code that reads like the code around it.** Match the surrounding comment
 density and naming.
 
-**Comment the *why*, not the *what*.** The non-obvious reasons in this codebase
-are almost always a design law or a measured failure — say which. `// L5: the
-intersection is computed here, never in SQL` is worth more than three lines
-describing the loop.
+**Comment sparingly, and only the *why*.** A comment earns its place by
+explaining something the code cannot: a non-obvious reason, a measured failure,
+a deliberate trade-off. If it restates what the line already says, delete it.
+Most lines need no comment.
+
+**A comment is self-contained. It never cites the PRD, the decision log, a
+section number, or a law number.** State the reason itself, in the comment. Not
+`// L5: intersection computed here, never in SQL` but `// The visible set is the
+intersection of each evidence row's ACL, computed here so it stays testable;
+Postgres filters, it does not decide.` The reader understands the code from the
+code, never from a document they must go open.
 
 **When a rule here blocks something that seems clearly better, say so rather
 than working around it.** Several of these rules exist because a prior approach

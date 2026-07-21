@@ -130,8 +130,9 @@ Every variable has a working default, so the commands above need no `.env`.
 | `CRED_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `CRED_LOG_FORMAT` | `text` | `text` or `json` |
 | `CRED_AUTO_CAPTURE` | `true` | Automatic nomination on `capture`; opt out with `false` |
-| `CRED_LLM_API_KEY` | — | Model key for `cred curate` (falls back to `ANTHROPIC_API_KEY`) |
-| `CRED_LLM_MODEL` | `claude-opus-4-8` | Model id the nominator uses |
+| `CRED_LLM_API_KEY` | — | Model key for `cred curate` |
+| `CRED_LLM_MODEL` | `claude-opus-4-8` | Model id the nominator uses (required for non-Anthropic) |
+| `CRED_LLM_BASE_URL` | — | OpenAI-compatible endpoint: OpenAI, DeepSeek, or self-hosted. Unset = Anthropic |
 | `CRED_CONTRIBUTION_QUOTA` | `120` | Accepted claims per principal per window (section 8) |
 | `CRED_COST_MAX_CALLS` | `500` | Inference calls per principal per window |
 | `CRED_COST_MAX_TOKENS` | `2000000` | Input tokens per principal per window |

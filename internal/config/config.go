@@ -64,6 +64,13 @@ type Config struct {
 	// most-capable Anthropic model; overridable for cost or availability.
 	LLMModel string
 
+	// LLMBaseURL selects the provider dialect. Empty means Anthropic (Claude).
+	// Any value routes to the OpenAI-compatible adapter, which covers OpenAI,
+	// DeepSeek, and self-hosted servers (vLLM, Ollama, LM Studio) alike — they
+	// all speak /chat/completions. Examples: https://api.deepseek.com,
+	// https://api.openai.com/v1, http://localhost:11434/v1.
+	LLMBaseURL string
+
 	// Limits is the usage-and-limits policy (PRD 8). It ships with working
 	// defaults (limit.Defaults), so the four controls are on out of the box with
 	// no configuration — a limit that has to be configured to exist is off on
@@ -82,10 +89,12 @@ func Load() (Config, error) {
 		LogLevel:           env("CRED_LOG_LEVEL", "info"),
 		LogFormat:          env("CRED_LOG_FORMAT", "text"),
 		AutoCapture:        true,
-		// Accept the provider's own variable as a fallback, so an environment
-		// that already exports ANTHROPIC_API_KEY needs no CRED-specific setup.
-		LLMAPIKey: env("CRED_LLM_API_KEY", os.Getenv("ANTHROPIC_API_KEY")),
-		LLMModel:  env("CRED_LLM_MODEL", ""),
+		// One key variable for every provider. A provider-specific fallback
+		// (ANTHROPIC_API_KEY) would privilege one dialect over the others now
+		// that OpenAI, DeepSeek, and self-hosted are equal citizens.
+		LLMAPIKey:  env("CRED_LLM_API_KEY", ""),
+		LLMModel:   env("CRED_LLM_MODEL", ""),
+		LLMBaseURL: env("CRED_LLM_BASE_URL", ""),
 	}
 
 	if v, ok := os.LookupEnv("CRED_ALLOW_MODEL_DOWNLOAD"); ok {
