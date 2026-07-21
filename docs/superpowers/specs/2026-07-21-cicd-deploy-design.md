@@ -168,9 +168,10 @@ ECR, and `caddy:2` for TLS) plus a `Caddyfile` routing
 1. **build-and-push**: OIDC-assume the deploy role, `docker buildx build`,
    tag with the git SHA (and `latest`), push both tags to ECR.
 2. **deploy** (needs `build-and-push`): OIDC-assume the deploy role, assemble
-   an `.env` blob from GitHub Actions secrets (DB password, LLM provider API
-   keys, session secret) plus the RDS endpoint (a Terraform output, stored as
-   a repo variable, not a secret), then `aws ssm send-command`
+   an `.env` blob from GitHub Actions secrets — the RDS master password (used
+   to build `DATABASE_URL`) and `CRED_LLM_API_KEY` — plus the RDS endpoint (a
+   Terraform output, stored as a repo variable, not a secret), then
+   `aws ssm send-command`
    (`AWS-RunShellScript`) targeting the instance, running a script that writes
    `/opt/cred/.env` and does `docker compose -f docker-compose.deploy.yml pull
    && up -d`. The workflow polls `aws ssm get-command-invocation` until the
