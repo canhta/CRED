@@ -39,6 +39,7 @@ func New(st *pg.Store, emb recall.Embedder, count recall.TokenCounter,
 		api.GET("/claims", s.listClaims)
 		api.GET("/claims/:id", s.getClaim)
 		api.GET("/recall", s.recall)
+		api.GET("/usage", s.usage)
 	}
 	return r
 }
