@@ -5,6 +5,7 @@ import type {
   ClaimList,
   Health,
   LoginRequest,
+  OrgUsageResponse,
   RecallResponse,
   RegisterRequest,
   UsageResponse,
@@ -107,16 +108,22 @@ export function getRecall(params: RecallParams): Promise<RecallResponse> {
   return request<RecallResponse>(`${routes.recall()}?${query.toString()}`);
 }
 
-export interface UsageParams {
+export function getUsage(): Promise<UsageResponse> {
+  return request<UsageResponse>(routes.usage());
+}
+
+export interface OrgUsageParams {
   scopes?: number;
 }
 
-export function getUsage(params: UsageParams = {}): Promise<UsageResponse> {
+export function getUsageOrg(params: OrgUsageParams = {}): Promise<OrgUsageResponse> {
   const query = new URLSearchParams();
   if (params.scopes !== undefined) query.set('scopes', String(params.scopes));
 
   const qs = query.toString();
-  return request<UsageResponse>(qs ? `${routes.usage()}?${qs}` : routes.usage());
+  return request<OrgUsageResponse>(
+    qs ? `${routes.usageOrg()}?${qs}` : routes.usageOrg(),
+  );
 }
 
 function postJSON<T>(url: string, body: unknown): Promise<T> {

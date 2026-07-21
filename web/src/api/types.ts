@@ -17,6 +17,7 @@ export type {
   Contribution as ArmContribution,
   RecallTimings,
   UsageResponse,
+  OrgUsageResponse,
   LimitStatus,
   ScopeCost,
   ScopeGrowth,

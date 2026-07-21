@@ -9,6 +9,7 @@ export const routes = {
   claim: (id: string) => `${API_BASE}/claims/${encodeURIComponent(id)}`,
   recall: () => `${API_BASE}/recall`,
   usage: () => `${API_BASE}/usage`,
+  usageOrg: () => `${API_BASE}/usage/org`,
   register: () => `${API_BASE}/auth/register`,
   login: () => `${API_BASE}/auth/login`,
   logout: () => `${API_BASE}/auth/logout`,

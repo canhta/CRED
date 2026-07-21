@@ -106,6 +106,7 @@ export interface HealthResponse {
   status: string;
   version: string;
   principal: string;
+  role: string;
   registration_open: boolean;
 }
 /**
@@ -194,9 +195,9 @@ export interface ClaimDetail {
   evidence: EvidenceItem[];
 }
 /**
- * UsageQuery is the query string of GET /api/usage.
+ * OrgUsageQuery is the query string of GET /api/usage/org.
  */
-export interface UsageQuery {
+export interface OrgUsageQuery {
   scopes: number /* int */;
 }
 /**
@@ -237,11 +238,12 @@ export interface ScopeGrowth {
   next_prune: number /* int */;
 }
 /**
- * UsageResponse is the body of GET /api/usage: the calling principal's limit
- * headroom, its denied-contribution count, and the org-wide cost/growth
- * report — the same counters and the same internal/limit decisions
- * `cred usage` prints, so the console never shows a number the enforcement
- * path didn't also compute.
+ * UsageResponse is the body of GET /api/usage: the calling principal's own
+ * limit headroom and denied-contribution count — the same counters and the
+ * same internal/limit decisions `cred usage` prints, so the console never
+ * shows a number the enforcement path didn't also compute. Org-wide data
+ * lives in OrgUsageResponse: a member's own view carries no other
+ * principal's data.
  */
 export interface UsageResponse {
   principal: string;
@@ -252,6 +254,13 @@ export interface UsageResponse {
   recall: LimitStatus;
   denied_window: string;
   denied: number /* int */;
+}
+/**
+ * OrgUsageResponse is the body of GET /api/usage/org: cost and growth by
+ * scope across every principal -- "which teams actually use this", visible
+ * to admins only.
+ */
+export interface OrgUsageResponse {
   cost_by_scope: ScopeCost[];
   scope_growth: ScopeGrowth[];
 }

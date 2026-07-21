@@ -16,6 +16,7 @@ const OPEN: Health = {
   status: 'ok',
   version: '0.1.0',
   principal: '',
+  role: '',
   registration_open: true,
 };
 

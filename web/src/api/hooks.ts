@@ -5,11 +5,12 @@ import {
   getHealth,
   getRecall,
   getUsage,
+  getUsageOrg,
   login,
   logout,
   register,
 } from './client';
-import type { ClaimsParams, RecallParams, UsageParams } from './client';
+import type { ClaimsParams, OrgUsageParams, RecallParams } from './client';
 import type { LoginRequest, RegisterRequest } from './types';
 
 export const queryKeys = {
@@ -17,7 +18,8 @@ export const queryKeys = {
   claims: (params: ClaimsParams) => ['claims', params] as const,
   claim: (id: string) => ['claim', id] as const,
   recall: (params: RecallParams) => ['recall', params] as const,
-  usage: (params: UsageParams) => ['usage', params] as const,
+  usage: ['usage'] as const,
+  usageOrg: (params: OrgUsageParams) => ['usage', 'org', params] as const,
 };
 
 export function useHealth() {
@@ -52,10 +54,21 @@ export function useRecall(params: RecallParams, enabled: boolean) {
   });
 }
 
-export function useUsage(params: UsageParams = {}) {
+export function useUsage() {
   return useQuery({
-    queryKey: queryKeys.usage(params),
-    queryFn: () => getUsage(params),
+    queryKey: queryKeys.usage,
+    queryFn: getUsage,
+  });
+}
+
+// The org-wide report is admin-only; the caller passes enabled so a
+// member's browser never issues a request that would 403 -- the same
+// enabled-gating shape useRecall already uses for its own precondition.
+export function useUsageOrg(params: OrgUsageParams, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.usageOrg(params),
+    queryFn: () => getUsageOrg(params),
+    enabled,
   });
 }
 

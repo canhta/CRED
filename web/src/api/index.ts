@@ -7,6 +7,7 @@ export {
   getClaim,
   getRecall,
   getUsage,
+  getUsageOrg,
   login,
   logout,
   register,
@@ -17,7 +18,7 @@ export type {
   ClaimsParams,
   StatusFilter,
   RecallParams,
-  UsageParams,
+  OrgUsageParams,
 } from './client';
 export {
   useHealth,
@@ -25,6 +26,7 @@ export {
   useClaim,
   useRecall,
   useUsage,
+  useUsageOrg,
   useLogin,
   useLogout,
   useRegister,

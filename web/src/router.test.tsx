@@ -25,6 +25,7 @@ const AUTHENTICATED: Health = {
   status: 'ok',
   version: '0.1.0',
   principal: 'local',
+  role: 'admin',
   registration_open: false,
 };
 
@@ -120,6 +121,7 @@ describe('appRoute beforeLoad guard', () => {
       status: 'ok',
       version: '0.1.0',
       principal: '',
+      role: '',
       registration_open: false,
     });
 
