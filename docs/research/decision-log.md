@@ -1737,3 +1737,66 @@ itself producing a KILL, AMBER, or PROCEED verdict — the decision is procedura
 are not amended by this entry; they still describe an experiment that will not
 happen. A reader relying on the PRD alone without also reading this entry would
 be misled about project state.
+
+## D-025 — Multi-user auth and RBAC are pulled into v1, reversing D-001
+
+- **Date:** 2026-07-21
+- **Status:** Decided (reverses the "no SSO, RBAC, audit, or org hierarchy in
+  v1" line of D-001)
+- **Evidence:** operator decision made while scoping the console's Team page.
+  Recorded here before any design or implementation work starts, per this
+  project's own rule that decisions are logged as they're made, not
+  reconstructed afterward.
+
+### Decision
+
+CRED builds real multi-user authentication and role-based access control in
+v1: accounts, an invite flow, and roles — not the single shared
+`X-CRED-Principal` header identity D-021/D-022's console shipped with. This
+is a reversal, not an addition: D-001 explicitly named "no SSO, RBAC, audit,
+or org hierarchy in v1" as a thing sequencing away from enterprise-first
+positioning ruled out, and this entry un-rules it out.
+
+### Reasoning
+
+Not yet written — this entry exists to put the reversal on the record before
+work starts, per the operator's explicit instruction while scoping the
+console's Team page. The reasoning, the design (auth mechanism, user
+storage, session/token handling, the role model, how it changes the
+existing single-principal ACL model, and how — or whether — it reaches the
+MCP server, which today has no auth surface at all per the investigation
+earlier this session), and the review of what this costs against D-001's
+original "adoption-first, minutes not a deployment project" thesis all
+belong in the design work that follows this entry, via
+superpowers:brainstorming.
+
+### What this rules out
+
+- Treating "no SSO/RBAC in v1" as settled. It is not — that is what this
+  entry reverses.
+- Shipping the Team page (or any RBAC surface) as a thin read-only view over
+  existing ACL grants, the way `docs/superpowers/specs/2026-07-21-usage-page-design.md`
+  did for Usage. The read-only alternative was offered and explicitly
+  declined in favor of this reversal.
+
+### What this forces
+
+- A real auth design pass (superpowers:brainstorming) before any Team-page
+  implementation — this is bigger than one console page and likely
+  decomposes into independent subsystems (account/session storage, the
+  invite flow, the role model, RBAC's interaction with the existing
+  claim-level ACL intersection, and whether/how MCP picks up the same
+  identity).
+- Revisiting D-001's "time-to-first-value measured in minutes, not a
+  deployment project" framing: multi-user auth is exactly the kind of setup
+  friction that constraint was written against, and this entry does not
+  resolve that tension — it is named here so the design pass has to answer
+  it, not skip it.
+
+### Open tension
+
+D-001 is Decided, not Superseded — its other lines (adoption-first OSS,
+long-horizon timeline, Seta as evidence source not spec) still hold. Only
+the SSO/RBAC/org-hierarchy line is reversed by this entry. A reader of D-001
+alone would not know that line no longer holds; this entry is the pointer
+forward, the same discipline D-024 used for the v0 gate.
