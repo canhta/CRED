@@ -465,7 +465,7 @@ git commit -m "infra: Terraform root skeleton — provider, partial backend, dat
 
 ---
 
-### Task 3: Security groups
+### Task 3: Security groups — DONE
 
 **Files:**
 - Create: `infra/terraform/network.tf`
@@ -475,17 +475,28 @@ git commit -m "infra: Terraform root skeleton — provider, partial backend, dat
 - Produces: `aws_security_group.ec2`, `aws_security_group.rds` — consumed by
   Task 6 (EC2), Task 7 (RDS).
 
-- [ ] **Step 1: Write `network.tf`**
+**Real gotcha hit during apply**: AWS security group ingress-rule
+`description` fields reject anything outside
+`^[0-9A-Za-z_ .:/()#,@\[\]+=&;{}!$*-]*$` — an apostrophe in "Caddy's"
+failed at `terraform plan` (schema-level validation). Worse, the *group's own*
+`description` field additionally rejects **any non-ASCII byte**, including an
+em dash — that one only surfaced at `terraform apply`, as a live API error,
+since `plan` doesn't catch it. Both fixed by using plain ASCII everywhere in
+these two fields specifically (comma instead of em dash, no apostrophes).
+Terraform variable `description` blocks are unaffected — they're pure
+documentation strings, never sent to AWS.
+
+- [x] **Step 1: Write `network.tf`**
 
 ```hcl
 # infra/terraform/network.tf
 resource "aws_security_group" "ec2" {
   name        = "cred-ec2-sg"
-  description = "Inbound HTTP/HTTPS for the cred test box; no SSH — shell access is via SSM."
+  description = "Inbound HTTP/HTTPS for the cred test box; no SSH, shell access is via SSM."
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "HTTP, needed for Caddy's ACME HTTP-01 challenge"
+    description = "HTTP, needed for Caddy ACME HTTP-01 challenge"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -538,7 +549,7 @@ resource "aws_security_group" "rds" {
 }
 ```
 
-- [ ] **Step 2: Plan and apply**
+- [x] **Step 2: Plan and apply**
 
 ```bash
 cd infra/terraform
@@ -550,7 +561,7 @@ TF_VAR_db_master_password=placeholder terraform apply
 Expected plan: `Plan: 2 to add, 0 to change, 0 to destroy.` Apply completes
 with `Apply complete! Resources: 2 added, 0 changed, 0 destroyed.`
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 aws ec2 describe-security-groups --profile canhta --region ap-southeast-1 \
@@ -560,7 +571,7 @@ aws ec2 describe-security-groups --profile canhta --region ap-southeast-1 \
 
 Expected: two rows, one per group name, each with a `sg-...` id.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add infra/terraform/network.tf
