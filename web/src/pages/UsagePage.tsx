@@ -12,8 +12,14 @@ import { ProgressBar } from '@astryxdesign/core/ProgressBar';
 import { Table, proportional, pixel } from '@astryxdesign/core/Table';
 import type { TableColumn } from '@astryxdesign/core/Table';
 import { useQueryClient } from '@tanstack/react-query';
-import { useUsage, queryKeys } from '../api';
-import type { LimitStatus, ScopeCost, ScopeGrowth, UsageResponse } from '../api';
+import { useHealth, useUsage, useUsageOrg, queryKeys } from '../api';
+import type {
+  LimitStatus,
+  OrgUsageResponse,
+  ScopeCost,
+  ScopeGrowth,
+  UsageResponse,
+} from '../api';
 
 type ScopeCostRow = ScopeCost & Record<string, unknown>;
 type ScopeGrowthRow = ScopeGrowth & Record<string, unknown>;
@@ -105,7 +111,10 @@ const scopeGrowthColumns: TableColumn<ScopeGrowthRow>[] = [
 ];
 
 export function UsagePage() {
+  const health = useHealth();
+  const isAdmin = health.data?.role === 'admin';
   const usage = useUsage();
+  const usageOrg = useUsageOrg({}, isAdmin);
   const queryClient = useQueryClient();
 
   return (
@@ -119,7 +128,7 @@ export function UsagePage() {
               variant="secondary"
               onClick={() => {
                 void queryClient.invalidateQueries({
-                  queryKey: queryKeys.usage({}),
+                  queryKey: queryKeys.usage,
                 });
               }}
             />
@@ -132,6 +141,9 @@ export function UsagePage() {
             isLoading={usage.isLoading}
             isError={usage.isError}
             data={usage.data}
+            isAdmin={isAdmin}
+            orgIsLoading={usageOrg.isLoading}
+            orgData={usageOrg.data}
           />
         </LayoutContent>
       }
@@ -143,10 +155,16 @@ function UsageBody({
   isLoading,
   isError,
   data,
+  isAdmin,
+  orgIsLoading,
+  orgData,
 }: {
   isLoading: boolean;
   isError: boolean;
   data: UsageResponse | undefined;
+  isAdmin: boolean;
+  orgIsLoading: boolean;
+  orgData: OrgUsageResponse | undefined;
 }) {
   if (isLoading) {
     return (
@@ -189,6 +207,30 @@ function UsageBody({
         <LimitCard label="Recall" status={data.recall} />
       </HStack>
 
+      {isAdmin ? (
+        <OrgUsageSection isLoading={orgIsLoading} data={orgData} />
+      ) : null}
+    </VStack>
+  );
+}
+
+function OrgUsageSection({
+  isLoading,
+  data,
+}: {
+  isLoading: boolean;
+  data: OrgUsageResponse | undefined;
+}) {
+  if (isLoading || !data) {
+    return (
+      <Center height={120}>
+        <Spinner label="Loading org usage" />
+      </Center>
+    );
+  }
+
+  return (
+    <VStack gap={4}>
       <VStack gap={2}>
         <Heading level={5}>Cost by scope</Heading>
         {data.cost_by_scope.length === 0 ? (

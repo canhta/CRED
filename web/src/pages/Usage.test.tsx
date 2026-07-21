@@ -3,13 +3,28 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { UsagePage } from './UsagePage';
-import { getUsage } from '../api/client';
-import type { UsageResponse } from '../api';
+import { getHealth, getUsage, getUsageOrg } from '../api/client';
+import type { Health, OrgUsageResponse, UsageResponse } from '../api';
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>();
-  return { ...actual, getUsage: vi.fn() };
+  return {
+    ...actual,
+    getHealth: vi.fn(),
+    getUsage: vi.fn(),
+    getUsageOrg: vi.fn(),
+  };
 });
+
+const ADMIN: Health = {
+  status: 'ok',
+  version: '0.1.0',
+  principal: 'local',
+  role: 'admin',
+  registration_open: false,
+};
+
+const MEMBER: Health = { ...ADMIN, role: 'member' };
 
 const SAMPLE_USAGE: UsageResponse = {
   principal: 'local',
@@ -41,6 +56,9 @@ const SAMPLE_USAGE: UsageResponse = {
   },
   denied_window: '1h0m0s',
   denied: 2,
+};
+
+const SAMPLE_ORG_USAGE: OrgUsageResponse = {
   cost_by_scope: [
     {
       scope: { kind: 'repo', value: 'cred' },
@@ -70,19 +88,22 @@ function renderWithClient(ui: ReactNode) {
 
 describe('UsagePage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(getUsage).mockResolvedValue(SAMPLE_USAGE);
+    vi.mocked(getUsageOrg).mockResolvedValue(SAMPLE_ORG_USAGE);
   });
 
-  it('renders the three limit stats and a scope row', async () => {
+  it('renders the three limit stats for any authenticated role', async () => {
+    vi.mocked(getHealth).mockResolvedValue(MEMBER);
     renderWithClient(<UsagePage />);
 
     expect(await screen.findByText('Contribution')).toBeInTheDocument();
     expect(screen.getByText('Inference cost')).toBeInTheDocument();
     expect(screen.getByText('Recall')).toBeInTheDocument();
-    expect(screen.getAllByText('repo: cred').length).toBeGreaterThan(0);
   });
 
   it('shows a warning banner when contributions have been denied', async () => {
+    vi.mocked(getHealth).mockResolvedValue(MEMBER);
     renderWithClient(<UsagePage />);
 
     expect(
@@ -91,8 +112,28 @@ describe('UsagePage', () => {
   });
 
   it('marks an exhausted limit with a warning badge', async () => {
+    vi.mocked(getHealth).mockResolvedValue(MEMBER);
     renderWithClient(<UsagePage />);
 
     expect(await screen.findByText('exhausted')).toBeInTheDocument();
+  });
+
+  it('renders the org-wide scope tables for an admin', async () => {
+    vi.mocked(getHealth).mockResolvedValue(ADMIN);
+    renderWithClient(<UsagePage />);
+
+    expect(await screen.findByText('Cost by scope')).toBeInTheDocument();
+    expect(screen.getByText('Scope growth')).toBeInTheDocument();
+    expect(screen.getAllByText('repo: cred').length).toBeGreaterThan(0);
+  });
+
+  it('hides the org-wide tables for a member and never requests them', async () => {
+    vi.mocked(getHealth).mockResolvedValue(MEMBER);
+    renderWithClient(<UsagePage />);
+
+    await screen.findByText('Contribution');
+    expect(screen.queryByText('Cost by scope')).not.toBeInTheDocument();
+    expect(screen.queryByText('Scope growth')).not.toBeInTheDocument();
+    expect(getUsageOrg).not.toHaveBeenCalled();
   });
 });
