@@ -1,0 +1,10 @@
+.git
+.github
+docs
+.superpowers
+infra
+node_modules
+web/node_modules
+web/dist
+cred
+*.md
