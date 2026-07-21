@@ -1,0 +1,44 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf install -y docker
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+mkdir -p /usr/libexec/docker/cli-plugins
+curl -sSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-$(uname -m)" \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+mkdir -p /opt/cred
+
+cat > /opt/cred/docker-compose.deploy.yml <<'COMPOSE_EOF'
+${docker_compose_content}
+COMPOSE_EOF
+
+cat > /opt/cred/Caddyfile <<'CADDY_EOF'
+${caddyfile_content}
+CADDY_EOF
+
+touch /opt/cred/.env
+
+cat > /etc/systemd/system/cred.service <<'UNIT_EOF'
+[Unit]
+Description=cred app stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/cred
+ExecStart=/usr/libexec/docker/cli-plugins/docker-compose -f docker-compose.deploy.yml up -d
+ExecStop=/usr/libexec/docker/cli-plugins/docker-compose -f docker-compose.deploy.yml down
+
+[Install]
+WantedBy=multi-user.target
+UNIT_EOF
+
+systemctl daemon-reload
+systemctl enable cred.service

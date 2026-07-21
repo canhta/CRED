@@ -1,0 +1,41 @@
+services:
+  db:
+    image: pgvector/pgvector:0.8.5-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cred
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: cred
+    volumes:
+      - cred-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cred -d cred"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  cred:
+    image: ${ECR_IMAGE}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - cred
+
+volumes:
+  cred-db:
+  caddy-data:
