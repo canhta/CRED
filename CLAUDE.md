@@ -4,25 +4,12 @@
 Evidence-governed memory for AI agents. A claim lives only while its evidence
 does.
 
-## Current phase
-
-**Building.** Research closed under D-015
-(`docs/research/decision-log.md`, 2026-07-20): "not building leaves
-outstanding at zero," and v0 stopped being a precondition and became "a
-design check run against a working system, not a hurdle before one exists."
-
-Implementation is underway. `internal/` holds the domain, recall, curate,
-nominate, anchor, ACL, and temporal packages; `main.go` and `internal/cli`
-wire up `serve` and `curate`; `web/` is the console frontend; CI
-(`.github/workflows/ci.yml`) lints, guards CGO, and runs unit, integration,
-and race suites on every push.
-
 Gate status, carried forward so it is not re-litigated:
 
-| Gate | Where it is decided | Status |
-|---|---|---|
-| Does a pure-Go embedding path exist without CGO? | `docs/research/spikes/go-embeddings-tokenizer.md` | **Cleared**, with a throughput condition |
-| Does retrieved memory beat plain long context? | `docs/research/spikes/v0-experiment-design.md` | **Dropped, unrun** — see D-024. No longer a precondition for building (D-015); it continues as an ordinary engineering question, evaluated per task shape as the system runs |
+| Gate                                             | Where it is decided                               | Status                                                                                                                                                                       |
+| ------------------------------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does a pure-Go embedding path exist without CGO? | `docs/research/spikes/go-embeddings-tokenizer.md` | **Cleared**, with a throughput condition                                                                                                                                     |
+| Does retrieved memory beat plain long context?   | `docs/research/spikes/v0-experiment-design.md`    | **Dropped, unrun** — see D-024. No longer a precondition for building (D-015); it continues as an ordinary engineering question, evaluated per task shape as the system runs |
 
 D-024's distinction still holds: the dropped gate was not failed, it was never
 measured. D-015 changed what that gate blocks, not what it found — it stopped

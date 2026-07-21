@@ -22,12 +22,35 @@ AWS SSM Run Command for the deploy step.
 
 ## Global Constraints
 
-- AWS account: `931628308308`, region `ap-southeast-1`, CLI profile `canhta`.
-- GitHub repo slug: `canhta/CRED` (verified via `git remote -v`).
+- **CRED is OSS — nothing in `infra/` may hardcode this operator's account ID,
+  AWS profile name, or personal domain.** Every account-specific value is a
+  Terraform variable with **no default** (`github_repo`, `domain_name`,
+  `db_master_password`) or derived at apply time from the authenticated
+  account (`data.aws_caller_identity.current.account_id`), never a literal.
+  A fork deploying under a different AWS account supplies its own
+  `terraform.tfvars` and `backend.hcl` and changes nothing else.
+- This operator's own values, for reference while executing this plan (never
+  baked into a committed file as a default): AWS account `931628308308`,
+  region `ap-southeast-1`, GitHub repo `canhta/CRED` (verified via
+  `git remote -v`), domain `cred.quickdemo.site`.
+- **This operator's `canhta` CLI profile authenticates via a `login_session`
+  key that is not part of AWS CLI's standard config schema** — Terraform's AWS
+  provider cannot resolve it directly, confirmed by a live `terraform apply`
+  failing with "No valid credential sources found" even with the profile
+  named in the provider block. The workaround is local to this operator, not
+  part of the reusable design: before any `terraform` command, run
+  `eval "$(aws configure export-credentials --profile canhta --format env)"`
+  to resolve the session into plain `AWS_ACCESS_KEY_ID` /
+  `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` env vars, which Terraform's
+  default credential chain does understand. A fork using a normal profile or
+  SSO config does not need this step.
 - An OIDC provider for `token.actions.githubusercontent.com` **already exists**
-  in this account (created 2026-07-15, tagged to an unrelated project). Never
-  create a second one — reference it via a Terraform data source. Never modify
-  or delete the existing `gha-sandbox` IAM role.
+  in this operator's account (created 2026-07-15, tagged to an unrelated
+  project). Never create a second one — reference it via a Terraform data
+  source. Never modify or delete the existing `gha-sandbox` IAM role. (This is
+  specific to this account; a fresh AWS account a fork deploys into may need
+  the data source to become a resource instead — call this out if
+  `terraform plan` errors with "no matching OpenIDConnectProvider found".)
 - No SSH / port 22 anywhere. Shell access to the instance is via SSM Session
   Manager only.
 - `CGO_ENABLED=0` always, matching every other build path in this repo
@@ -37,13 +60,15 @@ AWS SSM Run Command for the deploy step.
   is **no session-signing secret** — sessions are random tokens hashed and
   stored in the database (`internal/api/auth.go:40-100`), not derived from a
   shared secret.
-- Domain `cred.quickdemo.site` is managed in Hostinger, not Route 53 — DNS is
-  a manual step for the operator, not part of Terraform.
-- Free-tier eligibility for EC2/RDS on this specific account is **unconfirmed**
+- The domain (`var.domain_name`, no default) is expected to be managed
+  wherever the forker's registrar is — Caddy's ACME HTTP-01 challenge needs
+  only ports 80/443 reachable and an A record pointing at the instance, no
+  Route 53/ACM dependency for any fork.
+- Free-tier eligibility for EC2/RDS is account-specific and **unconfirmed for
+  this operator's account**
   (`docs/superpowers/specs/2026-07-21-cicd-deploy-design.md`, Cost section).
   Task 6 and Task 7 below create billable resources and each starts with a
-  STOP step for the operator to confirm eligibility in Billing → Free Tier
-  first.
+  STOP step to confirm eligibility in Billing → Free Tier first.
 
 ---
 
@@ -54,8 +79,11 @@ infra/
   terraform/
     bootstrap/
       main.tf              # S3 state bucket + DynamoDB lock table (applied once, locally)
-    versions.tf             # terraform block, backend "s3", provider "aws"
-    variables.tf            # aws_region, aws_profile, github_repo, domain_name, db_master_password
+    versions.tf             # terraform block, partial backend "s3" {}, provider "aws"
+    variables.tf            # aws_region, github_repo, domain_name, db_master_password — no
+                             # account-specific defaults
+    backend.hcl.example     # template for -backend-config; each fork copies to backend.hcl (gitignored)
+    terraform.tfvars.example # template for github_repo/domain_name; each fork copies to terraform.tfvars (gitignored)
     data.tf                 # default VPC/subnets, existing OIDC provider, caller identity, AMI lookup
     network.tf               # aws_security_group.ec2, aws_security_group.rds
     ecr.tf                   # aws_ecr_repository.cred, lifecycle policy
@@ -64,10 +92,10 @@ infra/
     rds.tf                   # aws_db_subnet_group, aws_db_instance.cred
     outputs.tf               # instance id, EIP, ECR URL, RDS address, deploy role ARN
     templates/
-      user_data.sh.tftpl     # cloud-init script, embeds the two files below
+      user_data.sh.tftpl     # cloud-init script, embeds docker-compose.deploy.yml + rendered Caddyfile
+      Caddyfile.tftpl        # ${domain_name} placeholder, filled from var.domain_name
     .gitignore
-  docker-compose.deploy.yml  # checked in; embedded into the instance via user_data
-  Caddyfile                  # checked in; embedded into the instance via user_data
+  docker-compose.deploy.yml  # checked in; no account-specific values; embedded via user_data
 Dockerfile                   # repo root; multi-stage, mirrors `task build`
 .dockerignore
 .github/workflows/deploy.yml # workflow_dispatch only
@@ -75,17 +103,20 @@ Dockerfile                   # repo root; multi-stage, mirrors `task build`
 
 ---
 
-### Task 1: Terraform state backend (bootstrap)
+### Task 1: Terraform state backend (bootstrap) — DONE
 
 **Files:**
 - Create: `infra/terraform/bootstrap/main.tf`
+- Create: `infra/terraform/bootstrap/.gitignore`
 
 **Interfaces:**
-- Produces: an S3 bucket `cred-tfstate-931628308308` and a DynamoDB table
-  `cred-tfstate-lock`, both referenced by name (not Terraform-managed
-  cross-reference) from `infra/terraform/versions.tf` in Task 2.
+- Produces: an S3 bucket named `cred-tfstate-<account-id>` (derived from
+  whichever account is authenticated, never hardcoded) and a DynamoDB table
+  `cred-tfstate-lock`. Neither is Terraform-cross-referenced from the main
+  config — a backend block cannot read another config's state — the operator
+  fills in the bucket name via `backend.hcl` in Task 2.
 
-- [ ] **Step 1: Write the bootstrap config**
+- [x] **Step 1: Write the bootstrap config**
 
 ```hcl
 # infra/terraform/bootstrap/main.tf
@@ -100,13 +131,24 @@ terraform {
   }
 }
 
-provider "aws" {
-  region  = "ap-southeast-1"
-  profile = "canhta"
+variable "aws_region" {
+  description = "AWS region for the state backend. No default — every fork picks its own."
+  type        = string
 }
 
+provider "aws" {
+  region = var.aws_region
+  # No hardcoded profile: authenticate with whatever the shell already has
+  # active (a named profile, SSO, or plain env-var credentials). A fork
+  # deploying under a different account/auth method needs no change here.
+}
+
+data "aws_caller_identity" "current" {}
+
 resource "aws_s3_bucket" "tfstate" {
-  bucket = "cred-tfstate-931628308308"
+  # Derived from the authenticated account, not hardcoded, so a fork gets its
+  # own uniquely-named bucket automatically.
+  bucket = "cred-tfstate-${data.aws_caller_identity.current.account_id}"
 
   lifecycle {
     prevent_destroy = true
@@ -161,20 +203,30 @@ output "lock_table" {
 }
 ```
 
-- [ ] **Step 2: Apply it (this is a one-time, local-only apply — never run from CI)**
+- [x] **Step 2: Apply it (this is a one-time, local-only apply — never run from CI)**
 
 ```bash
 cd infra/terraform/bootstrap
-AWS_PROFILE=canhta terraform init
-AWS_PROFILE=canhta terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+terraform init
+terraform apply -auto-approve -var="aws_region=ap-southeast-1"
 ```
 
-Expected: prompts to create 5 resources, then
-`Apply complete! Resources: 5 added, 0 changed, 0 destroyed.` with
-`state_bucket = "cred-tfstate-931628308308"` and
-`lock_table = "cred-tfstate-lock"` in the outputs.
+`-var="aws_region=..."` is required now that the variable has no default —
+every fork passes its own region explicitly, this operator's happens to be
+`ap-southeast-1`.
 
-- [ ] **Step 3: Verify the resources exist**
+The `eval "$(aws configure export-credentials ...)"` line is this operator's
+own workaround for the `canhta` profile's non-standard `login_session` auth
+(see Global Constraints) — resolve credentials this way whenever a plain
+`AWS_PROFILE=...` fails with "No valid credential sources found". A fork using
+a normal profile just runs `terraform apply` directly.
+
+**Actual result:** `Apply complete! Resources: 5 added, 0 changed, 0
+destroyed.` — `state_bucket = "cred-tfstate-931628308308"`,
+`lock_table = "cred-tfstate-lock"`.
+
+- [x] **Step 3: Verify the resources exist**
 
 ```bash
 aws s3api head-bucket --bucket cred-tfstate-931628308308 --profile canhta && echo "bucket OK"
@@ -182,7 +234,7 @@ aws dynamodb describe-table --table-name cred-tfstate-lock --profile canhta \
   --query "Table.TableStatus" --output text
 ```
 
-Expected: `bucket OK`, then `ACTIVE`.
+**Actual result:** `bucket OK`, then `ACTIVE`.
 
 - [ ] **Step 4: Commit**
 
@@ -198,20 +250,25 @@ git commit -m "infra: bootstrap the Terraform state backend (S3 + DynamoDB lock)
 **Files:**
 - Create: `infra/terraform/versions.tf`
 - Create: `infra/terraform/variables.tf`
+- Create: `infra/terraform/backend.hcl.example`
+- Create: `infra/terraform/terraform.tfvars.example`
 - Create: `infra/terraform/data.tf`
 - Create: `infra/terraform/outputs.tf` (empty stub, filled in by later tasks)
 - Create: `infra/terraform/.gitignore`
 
 **Interfaces:**
-- Consumes: the S3 bucket / DynamoDB table names from Task 1 (hardcoded, not
-  cross-referenced — the backend block cannot read another config's state).
+- Consumes: nothing Terraform-managed from Task 1 — the state bucket/table
+  names are supplied at `terraform init` time via `-backend-config`, not
+  cross-referenced (a backend block can't read another config's state or use
+  variables/data sources at all — a hard Terraform limitation, not a design
+  choice here).
 - Produces: `data.aws_vpc.default`, `data.aws_subnets.default`,
   `data.aws_iam_openid_connect_provider.github`, `data.aws_ami.al2023_arm64`,
   `data.aws_caller_identity.current`, and variables `var.aws_region`,
-  `var.aws_profile`, `var.github_repo`, `var.domain_name`,
-  `var.db_master_password` — all consumed by Tasks 3-8.
+  `var.github_repo`, `var.domain_name`, `var.db_master_password` — all
+  consumed by Tasks 3-8.
 
-- [ ] **Step 1: Write `versions.tf`**
+- [ ] **Step 1: Write `versions.tf` with a partial backend block**
 
 ```hcl
 # infra/terraform/versions.tf
@@ -225,60 +282,79 @@ terraform {
     }
   }
 
-  backend "s3" {
-    bucket         = "cred-tfstate-931628308308"
-    key            = "cred/terraform.tfstate"
-    region         = "ap-southeast-1"
-    dynamodb_table = "cred-tfstate-lock"
-    encrypt        = true
-  }
+  # Partial backend config on purpose: bucket/key/region/table are
+  # account-specific and a backend block cannot use variables, so they're
+  # supplied at `terraform init` time via -backend-config, keeping this file
+  # identical across every fork/account.
+  backend "s3" {}
 }
 
 provider "aws" {
-  region  = var.aws_region
-  profile = var.aws_profile
+  region = var.aws_region
+  # No hardcoded profile — see Global Constraints for this operator's own
+  # auth workaround, which lives in shell commands, never in this file.
 }
 ```
 
-- [ ] **Step 2: Write `variables.tf`**
+- [ ] **Step 2: Write `variables.tf` — no account-specific defaults**
 
 ```hcl
 # infra/terraform/variables.tf
 variable "aws_region" {
-  description = "AWS region for the cred test environment."
+  description = "AWS region for the cred test environment. No default — every fork picks its own."
   type        = string
-  default     = "ap-southeast-1"
-}
-
-variable "aws_profile" {
-  description = "Local AWS CLI profile Terraform authenticates with."
-  type        = string
-  default     = "canhta"
 }
 
 variable "github_repo" {
-  description = "GitHub repo allowed to assume the deploy role, owner/name form."
+  description = "GitHub repo allowed to assume the deploy role, owner/name form. No default — every fork must supply its own."
   type        = string
-  default     = "canhta/CRED"
 }
 
 variable "domain_name" {
-  description = "Public domain Caddy issues a TLS certificate for."
+  description = "Public domain Caddy issues a TLS certificate for. No default — every fork must supply its own."
   type        = string
-  default     = "cred.quickdemo.site"
 }
 
 variable "db_master_password" {
   description = <<-EOT
     RDS master password. Never committed. Supply via
-    TF_VAR_db_master_password or a gitignored *.auto.tfvars file.
+    TF_VAR_db_master_password, never via a *.tfvars file.
   EOT
   type      = string
   sensitive = true
 }
 ```
 
-- [ ] **Step 3: Write `data.tf`**
+- [ ] **Step 3: Write `backend.hcl.example` and `terraform.tfvars.example` —
+  the templates a fork copies and fills in**
+
+```hcl
+# infra/terraform/backend.hcl.example
+# Copy to backend.hcl (gitignored) and fill in your own state bucket/table —
+# see infra/terraform/bootstrap/main.tf, whose outputs are exactly these
+# two values.
+bucket         = "cred-tfstate-<your-account-id>"
+key            = "cred/terraform.tfstate"
+region         = "<your-region>"
+dynamodb_table = "cred-tfstate-lock"
+encrypt        = true
+```
+
+```hcl
+# infra/terraform/terraform.tfvars.example
+# Copy to terraform.tfvars (gitignored) and fill in your own values.
+# db_master_password does NOT go here — set it via
+# TF_VAR_db_master_password instead, so it never touches a file at all.
+aws_region  = "your-region"
+github_repo = "your-github-username/your-fork"
+domain_name = "your-domain.example.com"
+```
+
+This operator's own (not committed as defaults) values:
+`aws_region = "ap-southeast-1"`,
+`github_repo = "canhta/CRED"`, `domain_name = "cred.quickdemo.site"`.
+
+- [ ] **Step 4: Write `data.tf`**
 
 ```hcl
 # infra/terraform/data.tf
@@ -323,31 +399,51 @@ data "aws_ami" "al2023_arm64" {
 }
 ```
 
-- [ ] **Step 4: Write an empty `outputs.tf` stub**
+- [ ] **Step 5: Write an empty `outputs.tf` stub**
 
 ```hcl
 # infra/terraform/outputs.tf
 # Filled in by later tasks as each resource is added.
 ```
 
-- [ ] **Step 5: Write `infra/terraform/.gitignore`**
+- [ ] **Step 6: Write `infra/terraform/.gitignore`**
 
 ```
 .terraform/
 *.tfstate
 *.tfstate.*
 *.auto.tfvars
+terraform.tfvars
+backend.hcl
 crash.log
 ```
 
-- [ ] **Step 6: Init and validate (no resources yet — this only proves the
+`terraform.tfvars` and `backend.hcl` are gitignored deliberately — only the
+`.example` templates are tracked, so each fork's actual values (repo slug,
+domain, state bucket name) never touch git history.
+
+- [ ] **Step 7: Create this operator's own (gitignored) `backend.hcl` and
+  `terraform.tfvars` from the examples**
+
+```bash
+cd infra/terraform
+cp backend.hcl.example backend.hcl
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Then edit `backend.hcl` to set `bucket = "cred-tfstate-931628308308"` (from
+Task 1's `state_bucket` output) and edit `terraform.tfvars` to set
+`github_repo = "canhta/CRED"` and `domain_name = "cred.quickdemo.site"`.
+
+- [ ] **Step 8: Init and validate (no resources yet — this only proves the
   backend and data sources resolve)**
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta terraform init
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform validate
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform plan
+eval "$(aws configure export-credentials --profile canhta --format env)"
+terraform init -backend-config=backend.hcl
+TF_VAR_db_master_password=placeholder terraform validate
+TF_VAR_db_master_password=placeholder terraform plan
 ```
 
 Expected: `terraform init` reports
@@ -356,12 +452,14 @@ Expected: `terraform init` reports
 `No changes. Your infrastructure matches the configuration.` (data sources
 only, no resources declared yet).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit (the tracked files only — `backend.hcl` and
+  `terraform.tfvars` stay local, per `.gitignore`)**
 
 ```bash
 git add infra/terraform/versions.tf infra/terraform/variables.tf \
+  infra/terraform/backend.hcl.example infra/terraform/terraform.tfvars.example \
   infra/terraform/data.tf infra/terraform/outputs.tf infra/terraform/.gitignore
-git commit -m "infra: Terraform root skeleton — provider, backend, data sources"
+git commit -m "infra: Terraform root skeleton — provider, partial backend, data sources"
 ```
 
 ---
@@ -443,8 +541,9 @@ resource "aws_security_group" "rds" {
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform plan
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+TF_VAR_db_master_password=placeholder terraform plan
+TF_VAR_db_master_password=placeholder terraform apply
 ```
 
 Expected plan: `Plan: 2 to add, 0 to change, 0 to destroy.` Apply completes
@@ -473,12 +572,13 @@ git commit -m "infra: security groups for the cred EC2 instance and RDS"
 
 **Files:**
 - Create: `infra/terraform/ecr.tf`
+- Modify: `infra/terraform/outputs.tf`
 
 **Interfaces:**
-- Produces: `aws_ecr_repository.cred` — consumed by Task 5 (EC2 pull policy),
-  Task 8 (GitHub deploy role push policy), and referenced by name in
-  `infra/docker-compose.deploy.yml` (Task 9) and `.github/workflows/deploy.yml`
-  (Task 11).
+- Produces: `aws_ecr_repository.cred` — consumed by Task 5 (EC2 pull policy)
+  and Task 8 (GitHub deploy role push policy). Produces
+  `ecr_repository_url` output — consumed by Task 7 Step 5 (migration
+  verification) and set as a GitHub repository variable in Task 11.
 
 - [ ] **Step 1: Write `ecr.tf`**
 
@@ -534,29 +634,48 @@ counts the single `latest` tag and never expires old SHA-tagged images —
 storage would grow unbounded despite the rule appearing to cap it. `"any"`
 counts every image regardless of tag.
 
-- [ ] **Step 2: Plan and apply**
+- [ ] **Step 2: Add the output (in this task, not deferred to Task 8 — Task
+  7's migration-verification step needs it, and there's no reason to make it
+  wait)**
+
+```hcl
+# append to infra/terraform/outputs.tf
+output "ecr_repository_url" {
+  value = aws_ecr_repository.cred.repository_url
+}
+```
+
+- [ ] **Step 3: Plan and apply**
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+TF_VAR_db_master_password=placeholder terraform apply
 ```
 
-Expected: `Plan: 2 to add, 0 to change, 0 to destroy.` then apply succeeds.
+Expected: `Plan: 2 to add, 0 to change, 0 to destroy.` (outputs aren't
+resources, so the count doesn't change) then apply succeeds.
 
-- [ ] **Step 3: Verify**
+- [ ] **Step 4: Verify**
 
 ```bash
-aws ecr describe-repositories --profile canhta --region ap-southeast-1 \
-  --repository-names cred --query 'repositories[0].repositoryUri' --output text
-aws ecr get-lifecycle-policy --profile canhta --region ap-southeast-1 \
+cd infra/terraform
+terraform output -raw ecr_repository_url
+```
+
+Expected output (account- and region-specific to whoever applied this —
+this operator sees `931628308308.dkr.ecr.ap-southeast-1.amazonaws.com/cred`):
+the repo's URI. Then:
+
+```bash
+eval "$(aws configure export-credentials --profile canhta --format env)"
+aws ecr get-lifecycle-policy --region ap-southeast-1 \
   --repository-name cred --query 'lifecyclePolicyText' --output text
 ```
 
-Expected: the first command prints
-`931628308308.dkr.ecr.ap-southeast-1.amazonaws.com/cred`; the second prints
-the JSON policy with both rules.
+Expected: the JSON policy with both rules.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add infra/terraform/ecr.tf
@@ -639,7 +758,8 @@ resource "aws_iam_instance_profile" "cred_ec2" {
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+TF_VAR_db_master_password=placeholder terraform apply
 ```
 
 Expected: `Plan: 4 to add, 0 to change, 0 to destroy.` then apply succeeds.
@@ -677,7 +797,7 @@ git commit -m "infra: EC2 instance role — SSM Session Manager + scoped ECR pul
 
 **Files:**
 - Create: `infra/docker-compose.deploy.yml`
-- Create: `infra/Caddyfile`
+- Create: `infra/terraform/templates/Caddyfile.tftpl`
 - Create: `infra/terraform/templates/user_data.sh.tftpl`
 - Create: `infra/terraform/ec2.tf`
 - Modify: `infra/terraform/outputs.tf`
@@ -685,7 +805,7 @@ git commit -m "infra: EC2 instance role — SSM Session Manager + scoped ECR pul
 **Interfaces:**
 - Consumes: `aws_security_group.ec2` (Task 3), `aws_iam_instance_profile.cred_ec2`
   (Task 5), `data.aws_ami.al2023_arm64` (Task 2), `data.aws_subnets.default`
-  (Task 2).
+  (Task 2), `var.domain_name` (Task 2, rendered into the Caddyfile template).
 - Produces: `aws_instance.cred`, `aws_eip.cred` — `aws_instance.cred.arn`
   is consumed by Task 8 (GitHub deploy role's `ssm:SendCommand` policy);
   `aws_eip.cred.public_ip` is the address the operator points Hostinger's DNS
@@ -695,9 +815,12 @@ git commit -m "infra: EC2 instance role — SSM Session Manager + scoped ECR pul
 
 ```yaml
 # infra/docker-compose.deploy.yml
+# No hardcoded ECR URL — it's account-specific. ECR_IMAGE and IMAGE_TAG are
+# both supplied at deploy time (see Task 11's .env assembly), so this file is
+# identical across every fork/account.
 services:
   cred:
-    image: 931628308308.dkr.ecr.ap-southeast-1.amazonaws.com/cred:${IMAGE_TAG:-latest}
+    image: ${ECR_IMAGE}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
     expose:
@@ -719,10 +842,13 @@ volumes:
   caddy-data:
 ```
 
-- [ ] **Step 2: Write `infra/Caddyfile`**
+- [ ] **Step 2: Write `infra/terraform/templates/Caddyfile.tftpl`** — a
+  template, not a static file with a literal domain baked in, so this file is
+  identical across every fork; `var.domain_name` fills in the one placeholder
+  at apply time.
 
 ```
-cred.quickdemo.site {
+${domain_name} {
 	reverse_proxy cred:8080
 }
 ```
@@ -790,7 +916,9 @@ resource "aws_instance" "cred" {
 
   user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
     docker_compose_content = file("${path.module}/../docker-compose.deploy.yml")
-    caddyfile_content      = file("${path.module}/../Caddyfile")
+    caddyfile_content = templatefile("${path.module}/templates/Caddyfile.tftpl", {
+      domain_name = var.domain_name
+    })
   })
 
   tags = {
@@ -825,7 +953,8 @@ output "elastic_ip" {
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta TF_VAR_db_master_password=placeholder terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+TF_VAR_db_master_password=placeholder terraform apply
 ```
 
 Expected: `Plan: 2 to add, 0 to change, 0 to destroy.` then apply succeeds,
@@ -864,7 +993,7 @@ Expected output contains a Docker version line, `compose-file-present`, and
 - [ ] **Step 8: Commit**
 
 ```bash
-git add infra/docker-compose.deploy.yml infra/Caddyfile \
+git add infra/docker-compose.deploy.yml infra/terraform/templates/Caddyfile.tftpl \
   infra/terraform/templates/user_data.sh.tftpl infra/terraform/ec2.tf \
   infra/terraform/outputs.tf
 git commit -m "infra: EC2 instance + Elastic IP, Docker/Compose via user_data"
@@ -905,12 +1034,13 @@ resource "aws_db_subnet_group" "cred" {
 resource "aws_db_instance" "cred" {
   identifier = "cred-test-db"
   engine     = "postgres"
-  # Verified via `aws rds describe-db-engine-versions --engine postgres
-  # --engine-version 17` in ap-southeast-1: valid minors are 17.5-17.10, and
-  # the account's overall RDS default engine is Postgres 18 — this repo's
-  # docker-compose.yml pins pg17 specifically because PG18 changed the
-  # PGDATA path and silently loses data on the wrong volume mount, so this
-  # must stay pinned to an exact 17.x, never left to default.
+  # A specific 17.x is required — never left to default. This repo's
+  # docker-compose.yml pins pg17 for the same reason: PG18 changed the PGDATA
+  # path and silently loses data on the wrong volume mount. "17.10" was
+  # verified available via `aws rds describe-db-engine-versions --engine
+  # postgres --engine-version 17` in this deployment's region
+  # (ap-southeast-1) — re-run that check before deploying to a different
+  # region, since available minor versions vary by region.
   engine_version = "17.10"
   instance_class = "db.t4g.micro"
 
@@ -949,7 +1079,8 @@ output "rds_address" {
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta TF_VAR_db_master_password='<your real password>' terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+TF_VAR_db_master_password='<your real password>' terraform apply
 ```
 
 Expected: `Plan: 2 to add, 0 to change, 0 to destroy.` Apply can take
@@ -971,15 +1102,22 @@ Expected: `available`, `17.10`, and the RDS endpoint hostname.
   allows the EC2 instance's security group):
 
 ```bash
-INSTANCE_ID=$(cd infra/terraform && terraform output -raw ec2_instance_id)
-RDS_ADDRESS=$(cd infra/terraform && terraform output -raw rds_address)
-ECR_URL=$(cd infra/terraform && terraform output -raw ecr_repository_url 2>/dev/null || echo "931628308308.dkr.ecr.ap-southeast-1.amazonaws.com/cred")
+cd infra/terraform
+INSTANCE_ID=$(terraform output -raw ec2_instance_id)
+RDS_ADDRESS=$(terraform output -raw rds_address)
+ECR_URL=$(terraform output -raw ecr_repository_url)  # available since Task 4
+ECR_REGISTRY=${ECR_URL%%/*}                           # host part, before the first "/"
+cd - >/dev/null
 
 aws ssm send-command --profile canhta --region ap-southeast-1 \
   --instance-ids "$INSTANCE_ID" --document-name "AWS-RunShellScript" \
-  --parameters "commands=[\"aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 931628308308.dkr.ecr.ap-southeast-1.amazonaws.com\",\"docker run --rm -e DATABASE_URL='postgres://cred:<your real password>@${RDS_ADDRESS}:5432/cred?sslmode=require' ${ECR_URL}:latest /cred migrate\"]" \
+  --parameters "commands=[\"aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin ${ECR_REGISTRY}\",\"docker run --rm -e DATABASE_URL='postgres://cred:<your real password>@${RDS_ADDRESS}:5432/cred?sslmode=require' ${ECR_URL}:latest /cred migrate\"]" \
   --query 'Command.CommandId' --output text
 ```
+
+`ECR_URL` is no longer a hardcoded fallback — it's always available by this
+point because Task 4 (not Task 8) is where `ecr_repository_url` is defined,
+and Task 4 runs before this task.
 
 This step depends on an image already existing at `:latest` in ECR — if
 Task 9 (Dockerfile) and Task 10 (build-and-push workflow) haven't run yet,
@@ -1094,16 +1232,13 @@ resource "aws_iam_role_policy" "gha_deploy" {
 }
 ```
 
-- [ ] **Step 2: Add the output**
+- [ ] **Step 2: Add the output** (`ecr_repository_url` already exists from
+  Task 4 — only this one is new here)
 
 ```hcl
 # append to infra/terraform/outputs.tf
 output "gha_deploy_role_arn" {
   value = aws_iam_role.gha_deploy.arn
-}
-
-output "ecr_repository_url" {
-  value = aws_ecr_repository.cred.repository_url
 }
 ```
 
@@ -1111,7 +1246,8 @@ output "ecr_repository_url" {
 
 ```bash
 cd infra/terraform
-AWS_PROFILE=canhta TF_VAR_db_master_password='<your real password>' terraform apply
+eval "$(aws configure export-credentials --profile canhta --format env)"
+TF_VAR_db_master_password='<your real password>' terraform apply
 ```
 
 Expected: `Plan: 2 to add, 0 to change, 0 to destroy.`
@@ -1247,14 +1383,17 @@ git commit -m "build: add the multi-stage Dockerfile for the cred image"
   — consumed by Task 7's Step 5 (migration verification) and Task 11 (deploy
   job).
 
-- [ ] **Step 1: Set the repository variable from Task 8's output**
+- [ ] **Step 1: Set the repository variables from Task 8's output and this
+  operator's own region — nothing here is a workflow-file default, both live
+  as repo variables so a fork sets its own without touching `deploy.yml`**
 
 ```bash
 ROLE_ARN=$(cd infra/terraform && terraform output -raw gha_deploy_role_arn)
 gh variable set CRED_DEPLOY_ROLE_ARN --body "$ROLE_ARN"
+gh variable set CRED_AWS_REGION --body "ap-southeast-1"
 ```
 
-Expected: `gh` reports the variable was set. Verify:
+Expected: `gh` reports both variables were set. Verify:
 
 ```bash
 gh variable list | grep CRED_DEPLOY_ROLE_ARN
@@ -1282,7 +1421,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-southeast-1
+  # No hardcoded region: every fork sets its own CRED_AWS_REGION repository
+  # variable (Step 1 below). ECR_REPOSITORY is the project's own name, not an
+  # account-specific value — every fork's Terraform also creates it as "cred"
+  # (infra/terraform/ecr.tf), so it stays a literal here.
+  AWS_REGION: ${{ vars.CRED_AWS_REGION }}
   ECR_REPOSITORY: cred
 
 jobs:
