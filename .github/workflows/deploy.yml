@@ -22,7 +22,10 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # Native arm64, matching the t4g.micro target — avoids QEMU-emulating
+    # aarch64 on an x86_64 runner, which was 5-10x slower for the Go/npm
+    # build steps here.
+    runs-on: ubuntu-24.04-arm
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
     steps:
@@ -40,7 +43,6 @@ jobs:
       - id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Build and push
