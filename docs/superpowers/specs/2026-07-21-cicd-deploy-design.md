@@ -15,6 +15,21 @@ public release.
 
 ## Approach
 
+**Revised during implementation:** the "EC2 + RDS, both free-tier" call below
+assumed free-tier eligibility that turned out unconfirmed for this account —
+Cost Explorer showed no EC2/RDS usage history either way, and the account
+turned out to be on AWS's newer $200-credit model, not the classic
+12-month-per-service free tier. With $200 covering the original two-resource
+design for ~9-10 months regardless, cost pressure was no longer the deciding
+factor — the operator still chose to collapse to a single EC2 instance
+(self-hosted Postgres+pgvector via Docker Compose, matching the local-dev
+`docker-compose.yml` pattern) for operational simplicity. Supabase (managed
+Postgres+pgvector, free indefinitely) was considered and rejected: its
+free-tier projects auto-pause after ~1 week of inactivity, and it adds an
+external vendor dependency outside Terraform/AWS. Cloudflare R2 was raised
+and ruled out outright — it's object storage, not a SQL database, and can't
+run pgvector at all.
+
 **One environment, EC2 + RDS, both free-tier, manual deploy.** Rejected
 alternatives, in the order they were considered:
 
@@ -55,12 +70,13 @@ GitHub Actions (OIDC — no long-lived AWS keys stored as secrets)
                        → instance pulls the new tag, restarts via compose
 
 AWS ap-southeast-1 (profile: canhta)
-  EC2 t4g.micro (free tier, Graviton/arm64)      RDS db.t4g.micro (free tier)
-    container: cred   (from ECR)  ──── 5432 ────►  PostgreSQL 17 + pgvector
-    container: caddy  (TLS for cred.quickdemo.site)  single-AZ, no public access
+  EC2 t4g.micro (Graviton/arm64)
+    container: db     (pgvector/pgvector:0.8.5-pg17, local volume, compose-internal only)
+    container: cred   (from ECR)  ── localhost:5432 ──►  db
+    container: caddy  (TLS for cred.quickdemo.site)
     IAM instance role: SSM Session Manager + scoped ECR pull (no port 22)
   Elastic IP  ◄── DNS A record (operator configures in Hostinger)
-  Security group: 80/443 open; 5432 open to the EC2 security group only
+  Security group: 80/443 open only — Postgres is never network-exposed
 ```
 
 Shell access to the instance is via SSM Session Manager, not SSH — the
@@ -91,12 +107,9 @@ not earn a `modules/` split. Resources:
   expiring untagged images and keeping only the most recent tagged images
   (exact count decided in the implementation plan), so storage never grows
   unbounded.
-- **RDS**: `db.t4g.micro`, engine `postgres` 17.x, 20 GB gp3, single-AZ (the
-  free tier does not cover Multi-AZ), `publicly_accessible = false`, in a
-  security group that allows inbound 5432 only from the EC2 instance's
-  security group.
-- **Security groups**: `ec2_sg` (ingress 80/443 from `0.0.0.0/0`, no 22),
-  `rds_sg` (ingress 5432 from `ec2_sg` only).
+- **Security groups**: `ec2_sg` only (ingress 80/443 from `0.0.0.0/0`, no
+  22). No RDS, no `rds_sg` — Postgres is a container on the same instance,
+  reachable only over the compose network.
 - **GitHub OIDC**: **Verified** (`aws iam get-open-id-connect-provider`,
   account `931628308308`) an `aws_iam_openid_connect_provider` for
   `token.actions.githubusercontent.com` already exists in this account —
@@ -110,9 +123,9 @@ not earn a `modules/` split. Resources:
   No long-lived AWS access keys are stored as GitHub secrets. The existing
   `gha-sandbox` role (trusted for a different repo/environment entirely) is
   untouched.
-- **Outputs**: EC2 instance ID, Elastic IP, ECR repository URL, RDS endpoint,
-  OIDC deploy role ARN — the values `deploy.yml` and the operator's Hostinger
-  DNS step both need.
+- **Outputs**: EC2 instance ID, Elastic IP, ECR repository URL, OIDC deploy
+  role ARN — the values `deploy.yml` and the operator's Hostinger DNS step
+  both need.
 
 Default VPC and subnets are used via data sources — no custom VPC, no NAT
 gateway (a NAT gateway alone runs ~USD 32/month and nothing here needs
@@ -152,26 +165,26 @@ manual trigger only, so the extra minute or two per deploy is not a cost that
 compounds.
 
 **Verified**: `internal/store/migrations/00001_initial_schema.sql:7` already
-runs `CREATE EXTENSION IF NOT EXISTS vector`, so no separate Terraform step is
-needed to enable pgvector on RDS — the existing goose migration path (run via
-the app's own migrate command) covers it, same as local dev.
+runs `CREATE EXTENSION IF NOT EXISTS vector`, covering pgvector the same way
+it does for local dev — no separate step needed for the self-hosted
+container either.
 
 ## Deploy mechanism
 
-A checked-in `infra/docker-compose.deploy.yml` (two services: `cred` from
-ECR, and `caddy:2` for TLS) plus a `Caddyfile` routing
-`cred.quickdemo.site` to `cred:8080` — both copied onto the instance by
-`user_data` at launch, so a deploy never needs to re-ship them.
+A checked-in `infra/docker-compose.deploy.yml` (three services: `db`
+(`pgvector/pgvector:0.8.5-pg17`, matching local dev's pin), `cred` from ECR,
+and `caddy:2` for TLS) plus a `Caddyfile` routing `cred.quickdemo.site` to
+`cred:8080` — both copied onto the instance by `user_data` at launch, so a
+deploy never needs to re-ship them.
 
 `.github/workflows/deploy.yml`, `workflow_dispatch` only:
 
 1. **build-and-push**: OIDC-assume the deploy role, `docker buildx build`,
    tag with the git SHA (and `latest`), push both tags to ECR.
 2. **deploy** (needs `build-and-push`): OIDC-assume the deploy role, assemble
-   an `.env` blob from GitHub Actions secrets — the RDS master password (used
-   to build `DATABASE_URL`) and `CRED_LLM_API_KEY` — plus the RDS endpoint (a
-   Terraform output, stored as a repo variable, not a secret), then
-   `aws ssm send-command`
+   an `.env` blob from GitHub Actions secrets — the Postgres password (used
+   both for the `db` container and to build `DATABASE_URL` pointing at
+   `db:5432`) and `CRED_LLM_API_KEY` — then `aws ssm send-command`
    (`AWS-RunShellScript`) targeting the instance, running a script that writes
    `/opt/cred/.env` and does `docker compose -f docker-compose.deploy.yml pull
    && up -d`. The workflow polls `aws ssm get-command-invocation` until the
@@ -190,24 +203,23 @@ Manager instead.
 
 ## Cost
 
-| Resource | During free tier (12 months) | After |
+| Resource | With $200 signup credit | After credit runs out |
 |---|---|---|
-| EC2 t4g.micro | $0 (750 hrs/month) | ~USD 6-7/month |
-| RDS db.t4g.micro, 20 GB | $0 (750 hrs/month + storage) | ~USD 12-13/month |
-| ECR storage (<500 MB expected) | $0 | ~USD 0.05/month |
+| EC2 t4g.micro | covered | ~USD 6-7/month |
+| ECR storage (<500 MB expected) | covered | ~USD 0.05/month |
 | Elastic IP (attached) | $0 | $0 (only unattached EIPs bill) |
-| Data transfer | $0 (100 GB/month included) | usage-dependent, likely near $0 |
-| **Total** | **~$0/month** | **~USD 20-22/month** |
+| Data transfer | covered (100 GB/month typically included) | usage-dependent, likely near $0 |
+| **Total** | **~$0/month for ~30+ months at this rate** | **~USD 6-7/month** |
 
-**Checked, still unresolved**: `aws freetier get-free-tier-usage` (account
-`931628308308`) returns real usage lines for Glue, KMS, Lambda, SNS, SQS, and
-CloudWatch, but none for EC2 or RDS — because neither has ever been launched
-in this account, not because of eligibility either way. That API only reports
-usage for services already used, so it cannot answer the question for a
-service not yet provisioned. Eligibility still has to be confirmed in
-Billing → Free Tier before applying — this design assumes classic 12-month
-free tier, not the newer credit-based model some accounts now have, and nothing
-checked so far confirms which one applies here.
+**Checked**: `aws freetier get-free-tier-usage` (account `931628308308`)
+returns usage lines for Glue, KMS, Lambda, SNS, SQS, and CloudWatch, but none
+for EC2 — never launched in this account before now, so the API had nothing
+to report either way. Cost Explorer showed no billing history in the last
+~12 months. The account turned out to be on AWS's newer $200-credit signup
+model rather than the classic 12-month-per-service free tier — confirmed by
+the operator checking the Billing console directly, since neither the
+`freetier` nor Cost Explorer API can answer that question for a service not
+yet used.
 
 Also **verified**: no existing EC2 instances, RDS instances, or ECR
 repositories in `ap-southeast-1` on this profile, and the default VPC
@@ -231,7 +243,7 @@ operations before this becomes a recurring workflow.
 - First deploy is verified end-to-end manually: trigger `deploy.yml`, confirm
   the SSM command succeeds, confirm `cred.quickdemo.site` serves the console
   over HTTPS with a valid Let's Encrypt certificate, confirm recall/claims
-  pages load real data from the RDS-backed store.
+  pages load real data from the self-hosted Postgres store.
 - No automated smoke test against the live instance in this design — out of
   scope, see below.
 
